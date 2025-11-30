@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Lead, LeadStatus, User } from '../types';
 import { Trophy, Medal, DollarSign, Percent, CreditCard, ShieldCheck } from './Icons';
@@ -72,8 +71,9 @@ export const Ranking: React.FC<RankingProps> = ({ leads, users }) => {
       metrics.totalPremium += sale.dealInfo!.netPremium || 0;
       metrics.totalCommission += sale.dealInfo!.commission || 0;
 
-      // Contagem por Seguradora (Case Insensitive básico)
-      const insurer = sale.dealInfo!.insurer.toLowerCase();
+      // Contagem por Seguradora (Case Insensitive básico, protegendo contra undefined)
+      const insurer = (sale.dealInfo?.insurer || '').toLowerCase();
+      
       if (insurer.includes('porto')) metrics.portoCount++;
       else if (insurer.includes('azul')) metrics.azulCount++;
       else if (insurer.includes('itau') || insurer.includes('itaú')) metrics.itauCount++;
