@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Dashboard } from './components/Dashboard';
 import { LeadList } from './components/LeadList';
@@ -8,8 +7,8 @@ import { InsuredList } from './components/InsuredList';
 import { UserList } from './components/UserList';
 import { Ranking } from './components/Ranking';
 import { Lead, LeadStatus, User } from './types';
-import { LayoutDashboard, Users, RefreshCw, CheckCircle, FileText, UserCog, Trophy } from './components/Icons';
-import { subscribeToCollection, subscribeToRenovationsTotal, addDataToCollection, updateDataInCollection, updateTotalRenovacoes } from './services/firebase';
+import { LayoutDashboard, Users, RefreshCw, CheckCircle, FileText, UserCog, Trophy, AlertTriangle } from './components/Icons';
+import { subscribeToCollection, subscribeToRenovationsTotal, addDataToCollection, updateDataInCollection, updateTotalRenovacoes, isFirebaseConfigured } from './services/firebase';
 
 type View = 'dashboard' | 'leads' | 'renewals' | 'renewed' | 'insured' | 'users' | 'ranking';
 
@@ -66,39 +65,19 @@ export default function App() {
 
   // Adicionar Lead (Define a coleção baseada no tipo ou view atual)
   const handleAddLead = (newLead: Lead) => {
-    // Se estiver na view de renovações ou o tipo for Renovação, vai para 'renovacoes'
-    // Se for 'renovados' (cópia de fechamento), vai para 'renovados'
-    
-    // Lógica específica para o botão "Novo" na LeadList (Sempre cria em 'leads' a menos que especificado?)
-    // O pedido diz: "Meus Leads puxa de leads", "Renovações puxa de renovacoes"
-    
-    // Se o lead já tem status Fechado e veio de uma cópia (ex: handleSaveDeal no RenewalList),
-    // precisamos saber para onde mandar. O RenewalList chamará onAddLead com o objeto cópia.
-    
     if (newLead.id.includes('renewed')) {
-        // É uma cópia para Renovados
         addDataToCollection('renovados', newLead);
     } else if (newLead.insuranceType === 'Renovação' && currentView === 'renewals') {
-        // Criado manualmente na tela de renovações
         addDataToCollection('renovacoes', newLead);
     } else {
-        // Padrão (Meus Leads)
         addDataToCollection('leads', newLead);
     }
   };
 
-  // Atualizar Lead (Procura em qual coleção ele está pelo ID ou contexto, mas como IDs são unicos, update genérico seria ideal, 
-  // mas aqui sabemos o contexto pela View ou passamos a coleção certa)
   const handleUpdateLead = (updatedLead: Lead) => {
-      // Identificar a coleção de origem
-      // A maneira mais segura sem mudar a estrutura do objeto é tentar atualizar na coleção correspondente a view atual
-      // ou procurar onde ele existe.
-      
-      // Simplificação baseada na View atual:
       if (currentView === 'leads') {
           updateDataInCollection('leads', updatedLead.id, updatedLead);
       } else if (currentView === 'renewals' || currentView === 'insured') {
-          // Segurados e Renovações usam a mesma coleção 'renovacoes'
           updateDataInCollection('renovacoes', updatedLead.id, updatedLead);
       } else if (currentView === 'renewed') {
           updateDataInCollection('renovados', updatedLead.id, updatedLead);
@@ -122,14 +101,20 @@ export default function App() {
       updateTotalRenovacoes(val);
   };
 
-  // Combine collections for ranking or broad stats if needed, 
-  // but Dashboard receives specifics now.
   const allLeadsForRanking = [...leadsCollection, ...renewalsCollection, ...renewedCollection];
 
   return (
     <div className="flex h-screen bg-gray-50 text-gray-900 font-sans overflow-hidden">
+      
+      {/* Aviso de Firebase não configurado */}
+      {!isFirebaseConfigured && (
+        <div className="absolute top-0 left-0 right-0 z-50 bg-red-600 text-white text-xs font-bold px-4 py-2 text-center shadow-md">
+            ⚠️ ATENÇÃO: Firebase não configurado. Edite o arquivo <code>services/firebase.ts</code> com suas chaves para salvar os dados. (Modo Visualização)
+        </div>
+      )}
+
       {/* Sidebar */}
-      <aside className="w-64 bg-slate-900 text-white flex flex-col hidden md:flex">
+      <aside className="w-64 bg-slate-900 text-white flex flex-col hidden md:flex pt-8">
         <div className="p-6 border-b border-slate-800">
           <h1 className="text-xl font-bold flex items-center gap-2">
             <span className="bg-indigo-500 w-8 h-8 rounded-lg flex items-center justify-center">L</span>
@@ -209,7 +194,7 @@ export default function App() {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col h-full overflow-hidden relative">
+      <main className="flex-1 flex flex-col h-full overflow-hidden relative pt-6">
         <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-6 md:hidden">
             <h1 className="font-bold text-gray-800">Leads AI</h1>
             <button className="p-2 text-gray-600">☰</button>
@@ -219,7 +204,7 @@ export default function App() {
             {currentView === 'dashboard' && (
                 <Dashboard 
                     newLeadsData={leadsCollection}
-                    renewalLeadsData={[...renewalsCollection, ...renewedCollection]} // Renovações considera a carteira (aberta + fechada)
+                    renewalLeadsData={[...renewalsCollection, ...renewedCollection]} 
                     manualRenewalTotal={manualRenewalTotal}
                     onUpdateRenewalTotal={handleUpdateRenovationsTotal}
                 />
@@ -257,7 +242,6 @@ export default function App() {
 
             {currentView === 'insured' && (
                 <div className="h-full">
-                    {/* Segurados puxa da aba renovações (que contém o histórico de clientes) */}
                     <InsuredList 
                         leads={renewalsCollection} 
                         onUpdateLead={handleUpdateLead} 
