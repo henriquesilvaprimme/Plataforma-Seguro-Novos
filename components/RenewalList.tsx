@@ -50,7 +50,8 @@ const formatCreationDate = (dateString?: string) => {
 
 const RenewalCard: React.FC<{ lead: Lead, users: User[], onUpdate: (l: Lead) => void, onAdd: (l: Lead) => void, currentUser: User | null }> = ({ lead, users, onUpdate, onAdd, currentUser }) => {
     const [isEditingStatus, setIsEditingStatus] = useState(lead.status === LeadStatus.NEW);
-    const [isEditingUser, setIsEditingUser] = useState(false);
+    // FIX: Initialize based on whether there is an assigned user
+    const [isEditingUser, setIsEditingUser] = useState(!lead.assignedTo);
 
     const [selectedStatus, setSelectedStatus] = useState<LeadStatus | "">(""); 
     const [selectedUser, setSelectedUser] = useState<string>(lead.assignedTo || '');
@@ -106,6 +107,9 @@ const RenewalCard: React.FC<{ lead: Lead, users: User[], onUpdate: (l: Lead) => 
              setSelectedStatus("");
         }
         setSelectedUser(lead.assignedTo || '');
+        // FIX: Update edit mode if assignedTo changes externally to null
+        if (!lead.assignedTo) setIsEditingUser(true);
+        
         setDealForm(prev => ({ ...prev, leadName: lead.name }));
     }, [lead]);
 
@@ -342,7 +346,8 @@ const RenewalCard: React.FC<{ lead: Lead, users: User[], onUpdate: (l: Lead) => 
                                     </span>
                                 </div>
                             ) : (
-                                isEditingUser || !selectedUser ? (
+                                // FIX: Removed || !selectedUser from check to prevent premature toggle
+                                isEditingUser ? (
                                     <div className="flex gap-1 w-fit max-w-full">
                                         <select 
                                             className="w-36 bg-white border border-gray-300 text-xs rounded px-2 py-1 focus:ring-1 focus:ring-indigo-500 outline-none shadow-sm text-gray-700 font-medium"
