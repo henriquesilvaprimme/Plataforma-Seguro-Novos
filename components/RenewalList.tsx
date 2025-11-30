@@ -8,25 +8,13 @@ interface RenewalListProps {
   users: User[];
   onUpdateLead: (lead: Lead) => void;
   onAddLead: (lead: Lead) => void;
+  currentUser: User | null;
 }
 
-// Lista de Seguradoras
 const INSURERS_LIST = [
-  "Porto Seguro",
-  "Azul Seguros",
-  "Itau Seguro",
-  "Tokio Marine",
-  "Yelum Seguros",
-  "Allianz Seguros",
-  "Bradesco Seguros",
-  "Suhai Seguros",
-  "Zurich Seguros",
-  "Aliro Seguros",
-  "Mitsui Seguros",
-  "Hdi Seguros",
-  "Alfa Seguros",
-  "Mapfre Seguros",
-  "Demais Seguradoras"
+  "Porto Seguro", "Azul Seguros", "Itau Seguro", "Tokio Marine", "Yelum Seguros", "Allianz Seguros", 
+  "Bradesco Seguros", "Suhai Seguros", "Zurich Seguros", "Aliro Seguros", "Mitsui Seguros", 
+  "Hdi Seguros", "Alfa Seguros", "Mapfre Seguros", "Demais Seguradoras"
 ];
 
 const formatDisplayDate = (dateString?: string) => {
@@ -36,17 +24,13 @@ const formatDisplayDate = (dateString?: string) => {
         try {
             const date = new Date(dateString.includes('T') ? dateString : `${dateString}T00:00:00`);
             return date.toLocaleDateString('pt-BR');
-        } catch (e) {
-            return dateString;
-        }
+        } catch (e) { return dateString; }
     }
     return dateString;
 };
 
-// Helper to check if a date string is today
 const isToday = (dateString?: string) => {
     if (!dateString) return false;
-    // Checagem robusta de data
     if (dateString.includes('-')) {
         const date = new Date(dateString);
         const today = new Date();
@@ -62,24 +46,18 @@ const formatCreationDate = (dateString?: string) => {
     if (dateString.includes('/')) return dateString;
     try {
         return new Date(dateString).toLocaleDateString('pt-BR');
-    } catch (e) {
-        return dateString;
-    }
+    } catch (e) { return dateString; }
 };
 
-const RenewalCard: React.FC<{ lead: Lead, users: User[], onUpdate: (l: Lead) => void, onAdd: (l: Lead) => void }> = ({ lead, users, onUpdate, onAdd }) => {
-    // States for Edit Modes
-    // Initialize editing status to TRUE if lead is NEW, matching LeadList behavior
+const RenewalCard: React.FC<{ lead: Lead, users: User[], onUpdate: (l: Lead) => void, onAdd: (l: Lead) => void, currentUser: User | null }> = ({ lead, users, onUpdate, onAdd, currentUser }) => {
     const [isEditingStatus, setIsEditingStatus] = useState(lead.status === LeadStatus.NEW);
     const [isEditingUser, setIsEditingUser] = useState(false);
 
-    // Form States
     const [selectedStatus, setSelectedStatus] = useState<LeadStatus | "">(""); 
     const [selectedUser, setSelectedUser] = useState<string>(lead.assignedTo || '');
     const [observation, setObservation] = useState<string>(lead.notes || '');
     const [scheduleDate, setScheduleDate] = useState<string>(lead.scheduledDate || '');
 
-    // Deal Modal State
     const [showDealModal, setShowDealModal] = useState(false);
     const [dealForm, setDealForm] = useState<DealInfo & { leadName: string }>({
         leadName: lead.name,
@@ -92,7 +70,9 @@ const RenewalCard: React.FC<{ lead: Lead, users: User[], onUpdate: (l: Lead) => 
         endDate: ''
     });
 
-    // Calculate End Date whenever Start Date changes
+    const isAdmin = currentUser?.isAdmin;
+    const isLocked = (lead.status === LeadStatus.CLOSED || lead.status === LeadStatus.LOST) && !isAdmin;
+
     useEffect(() => {
         if (dealForm.startDate) {
             let dateStr = dealForm.startDate;
@@ -112,27 +92,21 @@ const RenewalCard: React.FC<{ lead: Lead, users: User[], onUpdate: (l: Lead) => 
         }
     }, [dealForm.startDate]);
 
-    // Determines which status to use for layout logic (Editing ? selected : saved)
-    // This affects ONLY the split view (showing input fields), NOT the card color
     const effectiveStatus = isEditingStatus ? (selectedStatus as LeadStatus) : (lead.status);
-
-    // Layout Logic
     const needsObservation = [LeadStatus.IN_CONTACT, LeadStatus.NO_CONTACT, LeadStatus.SCHEDULED].includes(effectiveStatus);
     const needsDate = effectiveStatus === LeadStatus.SCHEDULED;
     const isSplitView = needsObservation || needsDate;
     const isScheduledToday = lead.status === LeadStatus.SCHEDULED && isToday(lead.scheduledDate);
 
-    // Sync state with props ONLY if they change significantly or on mount
     useEffect(() => {
         setObservation(lead.notes || '');
         setScheduleDate(lead.scheduledDate || '');
         if (lead.status !== LeadStatus.NEW) {
              setSelectedStatus(lead.status);
         } else {
-             setSelectedStatus(""); // Ensure NEW maps to empty
+             setSelectedStatus("");
         }
         setSelectedUser(lead.assignedTo || '');
-        // Update deal form name if lead name changes
         setDealForm(prev => ({ ...prev, leadName: lead.name }));
     }, [lead]);
 
@@ -149,13 +123,10 @@ const RenewalCard: React.FC<{ lead: Lead, users: User[], onUpdate: (l: Lead) => 
 
     const handleConfirmStatus = () => {
         if (!isValidToSave()) return;
-
-        // Se o status for FECHADO, abre o modal e interrompe o salvamento direto
         if (selectedStatus === LeadStatus.CLOSED) {
             setShowDealModal(true);
             return;
         }
-
         const updatedLead = {
             ...lead,
             status: selectedStatus as LeadStatus,
@@ -167,13 +138,12 @@ const RenewalCard: React.FC<{ lead: Lead, users: User[], onUpdate: (l: Lead) => 
     };
 
     const handleSaveDeal = () => {
-        // 1. Criar uma CÓPIA do lead com status Fechado para a aba "Renovados"
         const closedLeadCopy: Lead = {
             ...lead,
-            id: `${lead.id}_renewed_${Date.now()}`, // Gerar ID único para a cópia
+            id: `${lead.id}_renewed_${Date.now()}`, 
             name: dealForm.leadName,
             status: LeadStatus.CLOSED,
-            assignedTo: lead.assignedTo || "Henrique Silva", // Atribui ao usuário atual se vazio
+            assignedTo: lead.assignedTo || "Henrique Silva",
             dealInfo: {
                 insurer: dealForm.insurer,
                 paymentMethod: dealForm.paymentMethod,
@@ -185,15 +155,14 @@ const RenewalCard: React.FC<{ lead: Lead, users: User[], onUpdate: (l: Lead) => 
             },
             createdAt: new Date().toISOString()
         };
-        onAdd(closedLeadCopy); // Adiciona a cópia na lista global
+        onAdd(closedLeadCopy);
 
-        // 2. Atualizar o lead ORIGINAL na aba "Renovações" para resetar
         const updatedLead: Lead = {
             ...lead,
-            name: dealForm.leadName, // Atualiza nome se mudou
-            status: LeadStatus.NEW, // Reset Status to NEW (Empty)
-            assignedTo: '',         // Reset Responsible to Empty
-            dealInfo: {             // Atualiza os dados para o próximo ciclo/histórico do card
+            name: dealForm.leadName,
+            status: LeadStatus.NEW,
+            assignedTo: '',
+            dealInfo: {
                 insurer: dealForm.insurer,
                 paymentMethod: dealForm.paymentMethod,
                 netPremium: dealForm.netPremium,
@@ -207,19 +176,13 @@ const RenewalCard: React.FC<{ lead: Lead, users: User[], onUpdate: (l: Lead) => 
         
         setShowDealModal(false);
         setIsEditingStatus(false);
-        // Reset local states visually
         setSelectedStatus(""); 
         setSelectedUser("");
     };
 
     const handleConfirmUser = () => {
-        // If nothing selected, default to active user "Henrique Silva"
         const userToAssign = selectedUser || "Henrique Silva";
-        
-        const updatedLead = {
-            ...lead,
-            assignedTo: userToAssign
-        };
+        const updatedLead = { ...lead, assignedTo: userToAssign };
         setSelectedUser(userToAssign);
         onUpdate(updatedLead);
         setIsEditingUser(false);
@@ -232,12 +195,10 @@ const RenewalCard: React.FC<{ lead: Lead, users: User[], onUpdate: (l: Lead) => 
           case LeadStatus.SCHEDULED: return 'bg-purple-100 text-purple-800 border-purple-200';
           case LeadStatus.LOST: return 'bg-red-100 text-red-800 border-red-200';
           case LeadStatus.IN_CONTACT: return 'bg-yellow-100 text-yellow-800 border-yellow-200';
-          default: return 'bg-gray-100 text-gray-800 hidden'; // Hidden if empty
+          default: return 'bg-gray-100 text-gray-800 hidden'; 
         }
     };
 
-    // Define dynamic card style based on ACTUAL lead status (saved in DB), 
-    // NOT selectedStatus. This prevents color change before confirmation.
     const cardStyle = lead.status === LeadStatus.CLOSED
       ? 'bg-green-50 border-green-200' 
       : lead.status === LeadStatus.LOST
@@ -252,20 +213,15 @@ const RenewalCard: React.FC<{ lead: Lead, users: User[], onUpdate: (l: Lead) => 
             ${cardStyle} rounded-xl shadow-sm border transition-all duration-300 w-full text-sm relative
             ${isSplitView ? 'md:grid md:grid-cols-2' : 'flex flex-col'}
         `}>
-            
-            {/* LEFT COLUMN: All Data + Controls */}
-            {/* EXTREMELY REDUCED PADDING AND GAP FOR COMPACT HEIGHT */}
             <div className={`p-2 flex flex-col justify-between gap-0.5 ${isSplitView ? `border-r ${borderColor}` : ''}`}>
                 <div className="flex flex-col gap-0.5">
                     
-                    {/* Header */}
                     <div className="flex justify-between items-start">
                         <div className="flex flex-col gap-0.5">
                             <div className="flex items-center gap-2">
                                 <h3 className="font-bold text-base text-gray-900 leading-tight">{lead.name}</h3>
                             </div>
                             <div className="flex flex-wrap items-center gap-2 min-h-[16px]">
-                                {/* Using lead.status instead of selectedStatus to ensure badge reflects saved state, hiding if NEW */}
                                 {!isEditingStatus && lead.status !== LeadStatus.NEW && (
                                     <span className={`inline-block px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wide border ${getStatusColor(lead.status)}`}>
                                         {lead.status}
@@ -286,22 +242,18 @@ const RenewalCard: React.FC<{ lead: Lead, users: User[], onUpdate: (l: Lead) => 
                         )}
                     </div>
 
-                    {/* Data Fields Stacked */}
                     <div className="flex flex-col gap-0.5 text-gray-800 text-xs">
-                        {/* Vehicle */}
                         <div className="flex items-center gap-2">
                             <Car className="w-3 h-3 text-gray-400 shrink-0" />
                             <span className="font-semibold text-gray-900">{lead.vehicleModel}</span>
                             <span className="text-[10px] text-gray-500">({lead.vehicleYear})</span>
                         </div>
                         
-                        {/* Phone */}
                         <div className="flex items-center gap-2">
                             <Phone className="w-3 h-3 text-gray-400 shrink-0" />
                             <span className="text-gray-700">{lead.phone}</span>
                         </div>
 
-                        {/* Financial Data (Integrated) */}
                         <div className="flex items-center gap-2">
                             <DollarSign className="w-3 h-3 text-gray-400 shrink-0" />
                             <span className="text-gray-700 font-medium">Prêmio: 
@@ -330,7 +282,6 @@ const RenewalCard: React.FC<{ lead: Lead, users: User[], onUpdate: (l: Lead) => 
                             </span>
                         </div>
 
-                        {/* STATUS CONTROL */}
                         <div className="mt-1">
                             <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5 block">
                                 Status do Lead
@@ -338,7 +289,6 @@ const RenewalCard: React.FC<{ lead: Lead, users: User[], onUpdate: (l: Lead) => 
                             
                             {isEditingStatus ? (
                                 <div className="flex gap-1">
-                                    {/* WIDTH SET TO w-36 (Fixed ~144px) */}
                                     <select 
                                         className="w-36 bg-white border border-gray-300 text-xs rounded px-2 py-1 focus:ring-1 focus:ring-indigo-500 outline-none shadow-sm font-medium text-gray-700"
                                         value={selectedStatus}
@@ -364,63 +314,70 @@ const RenewalCard: React.FC<{ lead: Lead, users: User[], onUpdate: (l: Lead) => 
                                 </div>
                             ) : (
                                 <div className="flex items-center justify-between">
-                                    <button 
-                                        onClick={() => setIsEditingStatus(true)}
-                                        className="bg-yellow-100 hover:bg-yellow-200 text-yellow-700 border border-yellow-300 px-3 py-1 rounded text-[10px] font-bold transition-colors shadow-sm uppercase tracking-wide w-auto"
-                                    >
-                                        Alterar
-                                    </button>
+                                    {!isLocked && (
+                                        <button 
+                                            onClick={() => setIsEditingStatus(true)}
+                                            className="bg-yellow-100 hover:bg-yellow-200 text-yellow-700 border border-yellow-300 px-3 py-1 rounded text-[10px] font-bold transition-colors shadow-sm uppercase tracking-wide w-auto"
+                                        >
+                                            Alterar
+                                        </button>
+                                    )}
                                 </div>
                             )}
                         </div>
                     </div>
 
-                    {/* RESPONSIBLE CONTROL */}
                     <div className="grid grid-cols-1 gap-0.5 pt-1 border-t border-gray-100 mt-0.5">
                         <div className="flex flex-col gap-0.5">
                             <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1">
                                 <Users className="w-3 h-3" /> Responsável
                             </label>
                             
-                            {isEditingUser || !selectedUser ? (
-                                <div className="flex gap-1">
-                                    {/* WIDTH SET TO w-36 (Fixed ~144px) */}
-                                    <select 
-                                        className="w-36 bg-white border border-gray-300 text-xs rounded px-2 py-1 focus:ring-1 focus:ring-indigo-500 outline-none shadow-sm text-gray-700 font-medium"
-                                        value={selectedUser}
-                                        onChange={(e) => setSelectedUser(e.target.value)}
-                                    >
-                                        <option value="">-- Selecione --</option>
-                                        {users.filter(u => u.isActive).map(u => (
-                                            <option key={u.id} value={u.name}>{u.name}</option>
-                                        ))}
-                                    </select>
-                                    <button 
-                                        type="button"
-                                        onClick={handleConfirmUser}
-                                        className="bg-indigo-600 text-white border border-indigo-700 hover:bg-indigo-700 px-3 py-1 rounded text-xs font-bold transition-colors shadow-sm uppercase tracking-wide"
-                                    >
-                                        Atribuir
-                                    </button>
-                                </div>
-                            ) : (
+                            {!isAdmin ? (
                                 <div className="flex items-center justify-between bg-gray-50 p-1.5 rounded border border-gray-200">
                                     <span className="text-xs font-bold text-gray-700 truncate mr-2">
                                         Atribuído para: <span className="text-indigo-700">{lead.assignedTo || 'Ninguém'}</span>
                                     </span>
-                                    <button 
-                                        onClick={() => setIsEditingUser(true)}
-                                        className="bg-yellow-100 hover:bg-yellow-200 text-yellow-700 border border-yellow-300 px-2 py-0.5 rounded text-[10px] font-bold transition-colors shadow-sm uppercase tracking-wide"
-                                    >
-                                        Alterar
-                                    </button>
                                 </div>
+                            ) : (
+                                isEditingUser || !selectedUser ? (
+                                    <div className="flex gap-1">
+                                        <select 
+                                            className="w-36 bg-white border border-gray-300 text-xs rounded px-2 py-1 focus:ring-1 focus:ring-indigo-500 outline-none shadow-sm text-gray-700 font-medium"
+                                            value={selectedUser}
+                                            onChange={(e) => setSelectedUser(e.target.value)}
+                                        >
+                                            <option value="">-- Selecione --</option>
+                                            {users.filter(u => u.isActive).map(u => (
+                                                <option key={u.id} value={u.name}>{u.name}</option>
+                                            ))}
+                                        </select>
+                                        <button 
+                                            type="button"
+                                            onClick={handleConfirmUser}
+                                            className="bg-indigo-600 text-white border border-indigo-700 hover:bg-indigo-700 px-3 py-1 rounded text-xs font-bold transition-colors shadow-sm uppercase tracking-wide"
+                                        >
+                                            Atribuir
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div className="flex items-center justify-between bg-gray-50 p-1.5 rounded border border-gray-200">
+                                        <span className="text-xs font-bold text-gray-700 truncate mr-2">
+                                            Atribuído para: <span className="text-indigo-700">{lead.assignedTo || 'Ninguém'}</span>
+                                        </span>
+                                        <button 
+                                            onClick={() => setIsEditingUser(true)}
+                                            className="bg-yellow-100 hover:bg-yellow-200 text-yellow-700 border border-yellow-300 px-2 py-0.5 rounded text-[10px] font-bold transition-colors shadow-sm uppercase tracking-wide"
+                                        >
+                                            Alterar
+                                        </button>
+                                    </div>
+                                )
                             )}
                         </div>
                     </div>
                 </div>
 
-                {/* Footer: Created At */}
                 <div className="mt-1 pt-1 flex items-center justify-end border-t border-gray-200">
                     <div className="text-[10px] text-gray-400 font-medium">
                         Criado em: {formatCreationDate(lead.createdAt)}
@@ -428,7 +385,6 @@ const RenewalCard: React.FC<{ lead: Lead, users: User[], onUpdate: (l: Lead) => 
                 </div>
             </div>
 
-            {/* RIGHT COLUMN: Conditional Inputs */}
             {isSplitView && (
                 <div className={`
                     p-2 flex flex-col gap-2 animate-fade-in border-l
@@ -493,7 +449,6 @@ const RenewalCard: React.FC<{ lead: Lead, users: User[], onUpdate: (l: Lead) => 
                     </div>
                     
                     <div className="p-6 space-y-4 overflow-y-auto">
-                        
                         <div>
                             <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Nome do Cliente</label>
                             <input 
@@ -503,7 +458,6 @@ const RenewalCard: React.FC<{ lead: Lead, users: User[], onUpdate: (l: Lead) => 
                                 className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-green-500 outline-none"
                             />
                         </div>
-
                         <div className="grid grid-cols-2 gap-4">
                             <div>
                                 <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Seguradora</label>
@@ -533,7 +487,6 @@ const RenewalCard: React.FC<{ lead: Lead, users: User[], onUpdate: (l: Lead) => 
                                  </select>
                             </div>
                         </div>
-
                         <div className="grid grid-cols-2 gap-4">
                             <div>
                                 <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Prêmio Líquido (R$)</label>
@@ -556,7 +509,6 @@ const RenewalCard: React.FC<{ lead: Lead, users: User[], onUpdate: (l: Lead) => 
                                 />
                             </div>
                         </div>
-
                         <div>
                             <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Parcelamento</label>
                             <select
@@ -565,13 +517,11 @@ const RenewalCard: React.FC<{ lead: Lead, users: User[], onUpdate: (l: Lead) => 
                                 className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-green-500 outline-none bg-white"
                             >
                                 <option value="">Selecione</option>
-                                {/* Removido À Vista, deixando apenas 1 a 12 */}
                                 {Array.from({ length: 12 }, (_, i) => i + 1).map(num => (
                                     <option key={num} value={`${num}x`}>{num}x</option>
                                 ))}
                             </select>
                         </div>
-
                         <div className="grid grid-cols-2 gap-4 p-3 bg-gray-50 rounded border border-gray-200">
                             <div>
                                 <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Início Vigência</label>
@@ -592,22 +542,10 @@ const RenewalCard: React.FC<{ lead: Lead, users: User[], onUpdate: (l: Lead) => 
                                 />
                             </div>
                         </div>
-
                     </div>
-
                     <div className="p-6 pt-0 flex gap-3 mt-auto">
-                        <button 
-                            onClick={() => setShowDealModal(false)}
-                            className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded hover:bg-gray-50 font-bold text-sm"
-                        >
-                            Cancelar
-                        </button>
-                        <button 
-                            onClick={handleSaveDeal}
-                            className="flex-1 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 font-bold text-sm shadow-md"
-                        >
-                            Confirmar Venda
-                        </button>
+                        <button onClick={() => setShowDealModal(false)} className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded hover:bg-gray-50 font-bold text-sm">Cancelar</button>
+                        <button onClick={handleSaveDeal} className="flex-1 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 font-bold text-sm shadow-md">Confirmar Venda</button>
                     </div>
                 </div>
             </div>
@@ -616,68 +554,46 @@ const RenewalCard: React.FC<{ lead: Lead, users: User[], onUpdate: (l: Lead) => 
     );
 };
 
-export const RenewalList: React.FC<RenewalListProps> = ({ leads, users, onUpdateLead, onAddLead }) => {
+export const RenewalList: React.FC<RenewalListProps> = ({ leads, users, onUpdateLead, onAddLead, currentUser }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
-  const [filterDate, setFilterDate] = useState<string>(''); // YYYY-MM
-  
-  // Pagination State
+  const [filterDate, setFilterDate] = useState<string>(''); 
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
-  // Reset pagination when filters change
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm, filterStatus, filterDate]);
+  useEffect(() => { setCurrentPage(1); }, [searchTerm, filterStatus, filterDate]);
 
   const filteredLeads = leads.filter(lead => {
     const term = searchTerm.toLowerCase();
     const name = lead.name || '';
     const phone = lead.phone || '';
-    
     const matchesSearch = name.toLowerCase().includes(term) || phone.includes(term);
     const matchesStatus = filterStatus === 'all' || lead.status === filterStatus;
-    
     let matchesDate = true;
     if (filterDate && lead.createdAt) {
         if(lead.createdAt.includes('-') && !lead.createdAt.includes('/')) {
             matchesDate = lead.createdAt.startsWith(filterDate);
-        } else {
-             matchesDate = true;
-        }
+        } else { matchesDate = true; }
     }
-
     return matchesSearch && matchesStatus && matchesDate;
   }).sort((a, b) => {
-      // Sort logic by newest
       const dateA = new Date(a.createdAt).getTime();
       const dateB = new Date(b.createdAt).getTime();
       return dateB - dateA;
   });
 
-  // Calculate Pagination
   const totalPages = Math.ceil(filteredLeads.length / itemsPerPage);
   const paginatedLeads = filteredLeads.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
-  const handleNextPage = () => {
-    if (currentPage < totalPages) setCurrentPage(p => p + 1);
-  };
-
-  const handlePrevPage = () => {
-    if (currentPage > 1) setCurrentPage(p => p - 1);
-  };
+  const handleNextPage = () => { if (currentPage < totalPages) setCurrentPage(p => p + 1); };
+  const handlePrevPage = () => { if (currentPage > 1) setCurrentPage(p => p - 1); };
 
   return (
     <div className="h-full flex flex-col">
-      {/* Header Controls */}
       <div className="mb-6 flex flex-col xl:flex-row xl:items-center justify-between gap-3 bg-white p-3 rounded-lg border border-gray-200 shadow-sm">
         <div className="flex items-center gap-2">
-            <div className="p-1.5 bg-green-100 text-green-600 rounded-lg">
-                <RefreshCw className="w-5 h-5" />
-            </div>
-            <div>
-                <h2 className="text-lg font-bold text-gray-800">Renovações</h2>
-            </div>
+            <div className="p-1.5 bg-green-100 text-green-600 rounded-lg"><RefreshCw className="w-5 h-5" /></div>
+            <div><h2 className="text-lg font-bold text-gray-800">Renovações</h2></div>
         </div>
         
         <div className="flex flex-col md:flex-row gap-2 flex-wrap">
@@ -712,7 +628,6 @@ export const RenewalList: React.FC<RenewalListProps> = ({ leads, users, onUpdate
         </div>
       </div>
 
-      {/* List Layout - Stacked Cards */}
       <div className="flex flex-col gap-4 pb-4 overflow-y-auto w-full px-1 flex-1">
         {paginatedLeads.map((lead) => (
             <RenewalCard 
@@ -721,6 +636,7 @@ export const RenewalList: React.FC<RenewalListProps> = ({ leads, users, onUpdate
                 users={users}
                 onUpdate={onUpdateLead}
                 onAdd={onAddLead}
+                currentUser={currentUser}
             />
         ))}
 
@@ -732,7 +648,6 @@ export const RenewalList: React.FC<RenewalListProps> = ({ leads, users, onUpdate
         )}
       </div>
 
-      {/* Pagination Controls */}
       {totalPages > 1 && (
         <div className="flex items-center justify-center gap-4 py-4 bg-white border-t border-gray-200 mt-auto">
             <button 
@@ -742,9 +657,7 @@ export const RenewalList: React.FC<RenewalListProps> = ({ leads, users, onUpdate
             >
                 Anterior
             </button>
-            <span className="text-sm text-gray-600 font-medium">
-                Página {currentPage} de {totalPages}
-            </span>
+            <span className="text-sm text-gray-600 font-medium">Página {currentPage} de {totalPages}</span>
             <button 
                 onClick={handleNextPage} 
                 disabled={currentPage === totalPages}
