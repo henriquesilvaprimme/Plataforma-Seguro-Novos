@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Dashboard } from './components/Dashboard';
 import { LeadList } from './components/LeadList';
@@ -8,7 +9,14 @@ import { UserList } from './components/UserList';
 import { Ranking } from './components/Ranking';
 import { Lead, LeadStatus, User } from './types';
 import { LayoutDashboard, Users, RefreshCw, CheckCircle, FileText, UserCog, Trophy, AlertTriangle } from './components/Icons';
-import { subscribeToCollection, subscribeToRenovationsTotal, addDataToCollection, updateDataInCollection, updateTotalRenovacoes, isFirebaseConfigured } from './services/firebase';
+import { 
+  subscribeToCollection, 
+  subscribeToRenovationsTotal, 
+  addDataToCollection, 
+  updateDataInCollection, 
+  updateTotalRenovacoes, 
+  isFirebaseConfigured 
+} from './services/firebase';
 
 type View = 'dashboard' | 'leads' | 'renewals' | 'renewed' | 'insured' | 'users' | 'ranking';
 
