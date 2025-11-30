@@ -420,7 +420,6 @@ const RenewalCard: React.FC<{ lead: Lead, onUpdate: (l: Lead) => void, onAdd: (l
                     
                     <div className="p-6 space-y-4 overflow-y-auto">
                         
-                        {/* Nome do Lead */}
                         <div>
                             <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Nome do Cliente</label>
                             <input 
@@ -431,7 +430,6 @@ const RenewalCard: React.FC<{ lead: Lead, onUpdate: (l: Lead) => void, onAdd: (l
                             />
                         </div>
 
-                        {/* Seguradora e Meio Pagamento */}
                         <div className="grid grid-cols-2 gap-4">
                             <div>
                                 <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Seguradora</label>
@@ -459,7 +457,6 @@ const RenewalCard: React.FC<{ lead: Lead, onUpdate: (l: Lead) => void, onAdd: (l
                             </div>
                         </div>
 
-                        {/* Valores */}
                         <div className="grid grid-cols-2 gap-4">
                             <div>
                                 <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Prêmio Líquido (R$)</label>
@@ -483,7 +480,6 @@ const RenewalCard: React.FC<{ lead: Lead, onUpdate: (l: Lead) => void, onAdd: (l
                             </div>
                         </div>
 
-                        {/* Parcelamento */}
                         <div>
                             <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Parcelamento</label>
                             <select
@@ -500,7 +496,6 @@ const RenewalCard: React.FC<{ lead: Lead, onUpdate: (l: Lead) => void, onAdd: (l
                             </select>
                         </div>
 
-                        {/* Vigência */}
                         <div className="grid grid-cols-2 gap-4 p-3 bg-gray-50 rounded border border-gray-200">
                             <div>
                                 <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Início Vigência</label>
@@ -562,7 +557,10 @@ export const RenewalList: React.FC<RenewalListProps> = ({ leads, onUpdateLead, o
 
   const filteredRenewals = renewalLeads.filter(lead => {
     const term = searchTerm.toLowerCase();
-    const matchesSearch = lead.name.toLowerCase().includes(term) || lead.phone.includes(term);
+    const name = lead.name || '';
+    const phone = lead.phone || '';
+    
+    const matchesSearch = name.toLowerCase().includes(term) || phone.includes(term);
     
     // Status Filter: Note that we might interpret 'New' leads as empty, but filter checks the real status
     const matchesStatus = filterStatus === 'all' || lead.status === filterStatus;
