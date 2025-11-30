@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import { Lead, LeadStatus, User } from '../types';
-import { Users, LayoutDashboard, BrainCircuit, ChevronLeft, ChevronRight, Shield, DollarSign, Percent, CheckCircle, XCircle } from './Icons';
+import { Users, LayoutDashboard, BrainCircuit, ChevronLeft, ChevronRight, Shield, DollarSign, Percent, CheckCircle, XCircle, Calendar, Edit, Check } from './Icons';
 
 interface DashboardProps {
   newLeadsData: Lead[]; 
@@ -30,8 +30,12 @@ interface Metrics {
 
 export const Dashboard: React.FC<DashboardProps> = ({ newLeadsData, renewalLeadsData, manualRenewalTotal, onUpdateRenewalTotal, currentUser }) => {
   const [section, setSection] = useState<Section>('NEW');
+  // Filtro de Data: Padrão Mês Atual (YYYY-MM)
+  const [filterDate, setFilterDate] = useState(() => new Date().toISOString().slice(0, 7));
+  
+  // State for Editing Renewal Total
   const [isEditingTotal, setIsEditingTotal] = useState(false);
-  const [editTotalValue, setEditTotalValue] = useState('');
+  const [tempTotal, setTempTotal] = useState('');
 
   // Lock Sections based on User Role
   useEffect(() => {
@@ -58,12 +62,29 @@ export const Dashboard: React.FC<DashboardProps> = ({ newLeadsData, renewalLeads
     return lead.assignedTo === currentUser.name;
   };
 
-  const filteredNewLeads = newLeadsData.filter(userFilter);
-  const filteredRenewalLeads = renewalLeadsData.filter(userFilter);
+  // Lógica de Filtro de Data
+  const dateFilter = (lead: Lead) => {
+      if (!filterDate) return true;
+      if (section === 'NEW') {
+          // Para Leads Novos: Filtra rigorosamente pela data de criação
+          return lead.createdAt && lead.createdAt.startsWith(filterDate);
+      } else {
+          // Para Renovações: Filtra pelo Fim de Vigência (Mês de Renovação)
+          return lead.dealInfo?.endDate && lead.dealInfo.endDate.startsWith(filterDate);
+      }
+  };
+
+  const filteredNewLeads = newLeadsData.filter(userFilter).filter(l => section === 'NEW' ? dateFilter(l) : true);
+  const filteredRenewalLeads = renewalLeadsData.filter(userFilter).filter(l => section === 'RENEWAL' ? dateFilter(l) : true);
 
   const calculateMetrics = (subset: Lead[], isRenewalSection: boolean): Metrics => {
-    // Total agora é baseado na contagem filtrada (Individual ou Global se Admin)
+    // Total agora é baseado na contagem filtrada
+    // POREM, se for Renovações e ADMIN, usa o Total Manual para calculo da meta/conversão global
     let total = subset.length;
+    
+    if (isRenewalSection && isAdmin) {
+        total = manualRenewalTotal;
+    }
     
     const closedDeals = subset.filter(l => l.status === LeadStatus.CLOSED);
     const sales = closedDeals.length;
@@ -122,36 +143,56 @@ export const Dashboard: React.FC<DashboardProps> = ({ newLeadsData, renewalLeads
     { name: 'Pendentes', value: Math.max(0, metrics.total - metrics.sales - metrics.lost), color: '#e5e7eb' }, 
   ];
 
+  const handleSaveTotal = () => {
+     const val = parseInt(tempTotal);
+     if (!isNaN(val)) {
+         onUpdateRenewalTotal(val);
+         setIsEditingTotal(false);
+     }
+  };
+
   return (
     <div className="space-y-6 animate-fade-in h-full flex flex-col">
       
       {/* Header with Toggle */}
-      <div className="flex items-center justify-between bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+      <div className="flex flex-col md:flex-row items-center justify-between bg-white p-4 rounded-xl shadow-sm border border-gray-100 gap-4">
          <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
             <LayoutDashboard className="w-6 h-6 text-indigo-600" />
             Dashboard ({isAdmin ? 'Global' : currentUser?.name})
          </h1>
          
-         <div className="flex items-center gap-4 bg-gray-50 rounded-lg p-1 border border-gray-200">
-             {isAdmin && (
-                <button 
-                    onClick={() => setSection(section === 'NEW' ? 'RENEWAL' : 'NEW')}
-                    className="p-1 hover:bg-gray-200 rounded transition-colors text-gray-600"
-                >
-                    <ChevronLeft className="w-5 h-5" />
-                </button>
-             )}
-             <span className="font-bold text-sm text-gray-700 w-32 text-center uppercase tracking-wide">
-                {section === 'NEW' ? 'Seguro Novo' : 'Renovações'}
-             </span>
-             {isAdmin && (
-                <button 
-                    onClick={() => setSection(section === 'NEW' ? 'RENEWAL' : 'NEW')}
-                    className="p-1 hover:bg-gray-200 rounded transition-colors text-gray-600"
-                >
-                    <ChevronRight className="w-5 h-5" />
-                </button>
-             )}
+         <div className="flex flex-wrap items-center gap-3">
+             <div className="flex items-center gap-2 bg-white border border-gray-300 rounded-lg px-2 py-1">
+                 <Calendar className="w-4 h-4 text-gray-500" />
+                 <input 
+                    type="month" 
+                    value={filterDate}
+                    onChange={(e) => setFilterDate(e.target.value)}
+                    className="text-sm font-medium text-gray-700 outline-none bg-transparent cursor-pointer"
+                 />
+             </div>
+
+             <div className="flex items-center gap-4 bg-gray-50 rounded-lg p-1 border border-gray-200">
+                 {isAdmin && (
+                    <button 
+                        onClick={() => setSection(section === 'NEW' ? 'RENEWAL' : 'NEW')}
+                        className="p-1 hover:bg-gray-200 rounded transition-colors text-gray-600"
+                    >
+                        <ChevronLeft className="w-5 h-5" />
+                    </button>
+                 )}
+                 <span className="font-bold text-sm text-gray-700 w-32 text-center uppercase tracking-wide">
+                    {section === 'NEW' ? 'Seguro Novo' : 'Renovações'}
+                 </span>
+                 {isAdmin && (
+                    <button 
+                        onClick={() => setSection(section === 'NEW' ? 'RENEWAL' : 'NEW')}
+                        className="p-1 hover:bg-gray-200 rounded transition-colors text-gray-600"
+                    >
+                        <ChevronRight className="w-5 h-5" />
+                    </button>
+                 )}
+             </div>
          </div>
       </div>
 
@@ -162,10 +203,40 @@ export const Dashboard: React.FC<DashboardProps> = ({ newLeadsData, renewalLeads
                 <div className="flex justify-between items-start z-10 relative">
                     <div className="w-full">
                         <p className="text-sm text-gray-500 font-bold uppercase mb-1">
-                            {section === 'NEW' ? (isAdmin ? 'Total Leads' : 'Meus Leads') : (isAdmin ? 'Total Renovações' : 'Minhas Renovações')}
+                            {section === 'NEW' ? (isAdmin ? 'Total Leads (Criados)' : 'Meus Leads (Criados)') : (isAdmin ? 'Total Renovações' : 'Minhas Renovações')}
                         </p>
                         
-                        <p className="text-3xl font-extrabold text-gray-900">{metrics.total}</p>
+                        {/* Se for Renovações E Admin, mostra o total editável. Se não, mostra o total calculado */}
+                        {section === 'RENEWAL' && isAdmin ? (
+                            <div className="flex items-center gap-2">
+                                {isEditingTotal ? (
+                                    <div className="flex items-center gap-1">
+                                        <input 
+                                            type="number" 
+                                            value={tempTotal} 
+                                            onChange={e => setTempTotal(e.target.value)}
+                                            className="w-24 text-2xl font-extrabold text-gray-900 border-b-2 border-indigo-500 outline-none"
+                                            autoFocus
+                                        />
+                                        <button onClick={handleSaveTotal} className="p-1 bg-green-100 text-green-700 rounded hover:bg-green-200"><Check className="w-4 h-4"/></button>
+                                        <button onClick={() => setIsEditingTotal(false)} className="p-1 bg-red-100 text-red-700 rounded hover:bg-red-200"><XCircle className="w-4 h-4"/></button>
+                                    </div>
+                                ) : (
+                                    <div className="flex items-center gap-2 group">
+                                        <p className="text-3xl font-extrabold text-gray-900">{manualRenewalTotal}</p>
+                                        <button 
+                                            onClick={() => { setTempTotal(manualRenewalTotal.toString()); setIsEditingTotal(true); }}
+                                            className="opacity-0 group-hover:opacity-100 transition-opacity p-1 text-gray-400 hover:text-indigo-600"
+                                            title="Editar Total Manual"
+                                        >
+                                            <Edit className="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        ) : (
+                            <p className="text-3xl font-extrabold text-gray-900">{metrics.total}</p>
+                        )}
                     </div>
                     
                     <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg shrink-0 ml-2">
