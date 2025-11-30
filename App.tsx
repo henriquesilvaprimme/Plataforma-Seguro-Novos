@@ -76,6 +76,9 @@ export default function App() {
   const handleAddLead = (newLead: Lead) => {
     if (newLead.id.includes('renewed')) {
         addDataToCollection('renovados', newLead);
+    } else if (newLead.id.includes('renewal_copy')) {
+        // Cópia vinda de Meus Leads fechados
+        addDataToCollection('renovacoes', newLead);
     } else if (newLead.insuranceType === 'Renovação' && currentView === 'renewals') {
         addDataToCollection('renovacoes', newLead);
     } else {
