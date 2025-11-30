@@ -508,7 +508,9 @@ export const RenewedList: React.FC<RenewedListProps> = ({ leads, onUpdateLead })
 
   const filteredRenewed = renewedLeads.filter(lead => {
     const term = searchTerm.toLowerCase();
-    const matchesSearch = lead.name.toLowerCase().includes(term) || lead.phone.includes(term);
+    const name = lead.name || '';
+    const phone = lead.phone || '';
+    const matchesSearch = name.toLowerCase().includes(term) || phone.includes(term);
     
     const matchesStatus = filterStatus === 'all' || lead.status === filterStatus;
     
