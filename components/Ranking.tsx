@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Lead, LeadStatus, User } from '../types';
 import { Trophy, Medal, DollarSign, Percent, CreditCard, ShieldCheck } from './Icons';
@@ -25,11 +26,12 @@ export const Ranking: React.FC<RankingProps> = ({ leads, users }) => {
   // 1. Filtrar apenas vendas fechadas
   const sales = leads.filter(l => l.status === LeadStatus.CLOSED && l.dealInfo);
 
-  // 2. Agrupar por Usuário e Calcular Métricas
+  // 2. Mapear APENAS Usuários Ativos vindos do Firebase
+  const activeUsers = users.filter(u => u.isActive);
   const metricsMap = new Map<string, UserMetrics>();
 
-  // Inicializar com todos os usuários ativos
-  users.filter(u => u.isActive).forEach(user => {
+  // Inicializar o mapa com os usuários ativos
+  activeUsers.forEach(user => {
       metricsMap.set(user.name, {
           userName: user.name,
           avatarColor: user.avatarColor || 'bg-gray-500',
@@ -45,48 +47,36 @@ export const Ranking: React.FC<RankingProps> = ({ leads, users }) => {
       });
   });
 
-  // Popular métricas com as vendas
+  // 3. Processar Vendas
   sales.forEach(sale => {
-      const assignedTo = sale.assignedTo || "Desconhecido";
-      // Se usuário não existir no map (ex: inativo ou removido), cria entrada basica ou pula
-      if (!metricsMap.has(assignedTo)) {
-        metricsMap.set(assignedTo, {
-            userName: assignedTo,
-            avatarColor: 'bg-gray-400',
-            salesCount: 0,
-            portoCount: 0,
-            azulCount: 0,
-            itauCount: 0,
-            othersCount: 0,
-            totalPremium: 0,
-            totalCommission: 0,
-            totalInstallments: 0,
-            countForAvg: 0
-        });
-      }
-
-      const metrics = metricsMap.get(assignedTo)!;
-      metrics.salesCount += 1;
-      metrics.countForAvg += 1;
-      metrics.totalPremium += sale.dealInfo!.netPremium || 0;
-      metrics.totalCommission += sale.dealInfo!.commission || 0;
-
-      // Contagem por Seguradora (Case Insensitive básico, protegendo contra undefined)
-      const insurer = (sale.dealInfo?.insurer || '').toLowerCase();
+      const assignedTo = sale.assignedTo || "";
       
-      if (insurer.includes('porto')) metrics.portoCount++;
-      else if (insurer.includes('azul')) metrics.azulCount++;
-      else if (insurer.includes('itau') || insurer.includes('itaú')) metrics.itauCount++;
-      else metrics.othersCount++;
+      // Só processa a venda se o usuário estiver na lista de ativos
+      if (metricsMap.has(assignedTo)) {
+          const metrics = metricsMap.get(assignedTo)!;
+          
+          metrics.salesCount += 1;
+          metrics.countForAvg += 1;
+          metrics.totalPremium += sale.dealInfo!.netPremium || 0;
+          metrics.totalCommission += sale.dealInfo!.commission || 0;
 
-      // Média de Parcelas (Extrair numero da string ex: "10x Sem Juros" -> 10)
-      const installmentStr = sale.dealInfo!.installments || "";
-      const match = installmentStr.match(/(\d+)/);
-      const installmentNum = match ? parseInt(match[0]) : 1; // Se 'À vista' ou não achar numero, assume 1
-      metrics.totalInstallments += installmentNum;
+          // Contagem por Seguradora
+          const insurer = (sale.dealInfo?.insurer || '').toLowerCase();
+          
+          if (insurer.includes('porto')) metrics.portoCount++;
+          else if (insurer.includes('azul')) metrics.azulCount++;
+          else if (insurer.includes('itau') || insurer.includes('itaú')) metrics.itauCount++;
+          else metrics.othersCount++;
+
+          // Média de Parcelas
+          const installmentStr = sale.dealInfo!.installments || "";
+          const match = installmentStr.match(/(\d+)/);
+          const installmentNum = match ? parseInt(match[0]) : 1;
+          metrics.totalInstallments += installmentNum;
+      }
   });
 
-  // 3. Converter para Array e Ordenar
+  // 4. Converter para Array e Ordenar
   const rankingList = Array.from(metricsMap.values()).sort((a, b) => b.salesCount - a.salesCount);
 
   return (
@@ -98,7 +88,7 @@ export const Ranking: React.FC<RankingProps> = ({ leads, users }) => {
           </div>
           <div>
              <h2 className="text-xl font-bold text-gray-800">Ranking de Vendas</h2>
-             <p className="text-xs text-gray-500">Desempenho da equipe comercial</p>
+             <p className="text-xs text-gray-500">Desempenho da equipe comercial (Usuários Ativos)</p>
           </div>
        </div>
 
@@ -112,12 +102,12 @@ export const Ranking: React.FC<RankingProps> = ({ leads, users }) => {
               return (
                   <div key={user.userName} className={`relative rounded-xl shadow-sm border p-6 transition-all ${isFirst ? 'bg-gradient-to-br from-yellow-50 to-white border-yellow-300 shadow-md transform scale-[1.01]' : 'bg-white border-gray-200'}`}>
                       
-                      {/* Rank Badge - FIXED POSITIONING INSIDE */}
+                      {/* Rank Badge */}
                       <div className={`absolute top-0 left-0 w-12 h-12 rounded-tl-xl rounded-br-2xl flex items-center justify-center font-bold text-xl shadow-sm border-b border-r z-10 ${isFirst ? 'bg-yellow-400 text-yellow-900 border-yellow-200' : index === 1 ? 'bg-gray-300 text-gray-800 border-gray-200' : index === 2 ? 'bg-orange-300 text-orange-900 border-orange-200' : 'bg-slate-100 text-slate-500 border-slate-200'}`}>
                           {index + 1}º
                       </div>
 
-                      {/* Top Section: User & Total Sales - Added pl-12 for spacing */}
+                      {/* Top Section */}
                       <div className="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-gray-100 pb-4 mb-4 pl-12">
                           <div className="flex items-center gap-4">
                               <div className={`w-14 h-14 rounded-full flex items-center justify-center text-white font-bold text-xl shadow-sm ${user.avatarColor}`}>
@@ -199,7 +189,7 @@ export const Ranking: React.FC<RankingProps> = ({ leads, users }) => {
           {rankingList.length === 0 && (
              <div className="py-12 text-center text-gray-400 bg-white rounded-xl border-2 border-dashed border-gray-200">
                 <Trophy className="w-12 h-12 mx-auto mb-3 opacity-20" />
-                <p>Nenhuma venda registrada para gerar o ranking.</p>
+                <p>Nenhuma venda registrada para os usuários ativos.</p>
              </div>
           )}
        </div>
