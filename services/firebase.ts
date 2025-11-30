@@ -35,6 +35,26 @@ if (isFirebaseConfigured) {
     console.warn("Firebase não configurado. O app rodará em modo de visualização (Mock).");
 }
 
+// === FUNÇÕES AUXILIARES DE PARSE ===
+
+const parseCurrency = (val: any): number => {
+    if (typeof val === 'number') return val;
+    if (!val) return 0;
+    // Remove "R$", espaços e pontos de milhar. Substitui vírgula decimal por ponto.
+    const cleanStr = val.toString().replace(/[R$\s.]/g, '').replace(',', '.');
+    const number = parseFloat(cleanStr);
+    return isNaN(number) ? 0 : number;
+};
+
+const parsePercentage = (val: any): number => {
+    if (typeof val === 'number') return val;
+    if (!val) return 0;
+    // Remove "%" e espaços. Substitui vírgula por ponto.
+    const cleanStr = val.toString().replace(/[%\s]/g, '').replace(',', '.');
+    const number = parseFloat(cleanStr);
+    return isNaN(number) ? 0 : number;
+};
+
 // === FUNÇÕES AUXILIARES DE MAPEAMENTO (BANCO -> APP) ===
 
 export const mapDocumentToLead = (doc: any): Lead => {
@@ -67,14 +87,15 @@ export const mapDocumentToLead = (doc: any): Lead => {
         registeredAt: data.registeredAt, // Para renovações
 
         // Dados do Fechamento (Achatados no banco -> Objeto no App)
-        dealInfo: (data.Seguradora || data.PremioLiquido) ? {
+        // Usamos os parsers aqui para garantir que strings formatadas virem números
+        dealInfo: (data.Seguradora || data.PremioLiquido || data.VigenciaInicial) ? {
             insurer: data.Seguradora || '',
-            netPremium: Number(data.PremioLiquido) || 0,
-            commission: Number(data.Comissao) || 0,
+            netPremium: parseCurrency(data.PremioLiquido),
+            commission: parsePercentage(data.Comissao),
             installments: data.Parcelamento || '',
             startDate: data.VigenciaInicial || '',
             endDate: data.VigenciaFinal || '',
-            paymentMethod: '' // Não especificado na lista do banco, mantém vazio ou mapeia se existir
+            paymentMethod: '' 
         } : undefined,
 
         // Manter endossos se existirem (estrutura complexa)
