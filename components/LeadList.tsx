@@ -235,19 +235,19 @@ const LeadCard: React.FC<{ lead: Lead; onUpdate: (l: Lead) => void }> = ({ lead,
   return (
     <>
     <div className={`
-        ${cardStyle} rounded-lg shadow-sm border transition-all duration-300 w-full text-sm relative
+        ${cardStyle} rounded-xl shadow-sm border transition-all duration-300 w-full text-sm relative
         ${isSplitView ? 'md:grid md:grid-cols-2' : 'flex flex-col'}
     `}>
       
       {/* LEFT COLUMN: Data + Controls + Footer */}
-      <div className={`p-3 flex flex-col justify-between ${isSplitView ? `border-r ${borderColor}` : ''}`}>
+      <div className={`p-6 flex flex-col justify-between ${isSplitView ? `border-r ${borderColor}` : ''}`}>
         
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-5">
             {/* Header Name & Badges */}
             <div className="flex justify-between items-start">
                 <div className="flex flex-col gap-1">
                     <div className="flex items-center gap-2">
-                        <h3 className="font-bold text-base text-gray-900 leading-tight">{lead.name}</h3>
+                        <h3 className="font-bold text-xl text-gray-900 leading-tight">{lead.name}</h3>
                         {lead.aiScore !== undefined && (
                             <div className="flex items-center gap-0.5 bg-indigo-50 px-1.5 py-0.5 rounded text-xs font-bold text-indigo-700 border border-indigo-100">
                             <BrainCircuit className="w-3 h-3" />
@@ -281,7 +281,7 @@ const LeadCard: React.FC<{ lead: Lead; onUpdate: (l: Lead) => void }> = ({ lead,
             </div>
 
             {/* Data Fields */}
-            <div className="flex flex-col gap-1 text-gray-800">
+            <div className="flex flex-col gap-2 text-gray-800">
                 <div className="flex items-center gap-2">
                     <Car className="w-4 h-4 text-gray-400 shrink-0" />
                     <span className="font-semibold text-gray-900">{lead.vehicleModel}</span>
@@ -304,7 +304,7 @@ const LeadCard: React.FC<{ lead: Lead; onUpdate: (l: Lead) => void }> = ({ lead,
                 </div>
 
                 {/* STATUS ALTERATION BLOCK */}
-                <div className="mt-2">
+                <div className="mt-3">
                     <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1 block">
                         Status do Lead
                     </label>
@@ -352,7 +352,7 @@ const LeadCard: React.FC<{ lead: Lead; onUpdate: (l: Lead) => void }> = ({ lead,
             </div>
 
             {/* RESPONSIBLE USER BLOCK */}
-            <div className="grid grid-cols-1 gap-2 pt-2 border-t border-gray-100 mt-1">
+            <div className="grid grid-cols-1 gap-2 pt-3 border-t border-gray-100 mt-1">
                  <div className="flex flex-col gap-1">
                     <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1">
                         <Users className="w-3 h-3" /> Responsável
@@ -389,7 +389,7 @@ const LeadCard: React.FC<{ lead: Lead; onUpdate: (l: Lead) => void }> = ({ lead,
                             </button>
                         </div>
                     ) : (
-                        <div className="flex items-center justify-between bg-gray-50 p-1.5 rounded border border-gray-200">
+                        <div className="flex items-center justify-between bg-gray-50 p-2 rounded border border-gray-200">
                              <span className="text-xs font-bold text-gray-700 truncate mr-2">
                                 Atribuído para: <span className="text-indigo-700">{lead.assignedTo}</span>
                              </span>
@@ -406,7 +406,7 @@ const LeadCard: React.FC<{ lead: Lead; onUpdate: (l: Lead) => void }> = ({ lead,
         </div>
 
         {/* Footer Actions */}
-        <div className="mt-3 pt-2 flex items-center justify-end border-t border-gray-200">
+        <div className="mt-4 pt-3 flex items-center justify-end border-t border-gray-200">
             <div className="text-[10px] text-gray-400 font-medium">
                 Criado em: {formatCreationDate(lead.createdAt)}
             </div>
@@ -416,18 +416,18 @@ const LeadCard: React.FC<{ lead: Lead; onUpdate: (l: Lead) => void }> = ({ lead,
       {/* RIGHT COLUMN: Conditional Inputs OR Deal Info */}
       {isSplitView && (
         <div className={`
-            p-3 flex flex-col gap-3 animate-fade-in border-l
+            p-6 flex flex-col gap-5 animate-fade-in border-l
             ${lead.status === LeadStatus.CLOSED ? borderColor : `bg-gray-50 ${borderColor}`}
         `}>
             
             {hasDealInfo ? (
                 // DEAL INFO VIEW (Read Only)
-                <div className="flex flex-col gap-2 h-full">
-                     <h4 className="text-xs font-bold text-green-700 uppercase tracking-wide border-b border-green-200 pb-1 flex items-center gap-1">
-                        <Shield className="w-3 h-3"/> Venda Confirmada
+                <div className="flex flex-col gap-4 h-full">
+                     <h4 className="text-sm font-bold text-green-700 uppercase tracking-wide border-b border-green-200 pb-2 flex items-center gap-1">
+                        <Shield className="w-4 h-4"/> Venda Confirmada
                      </h4>
-                     <div className="flex-1 text-xs space-y-2 overflow-y-auto text-gray-700">
-                        <div className="grid grid-cols-2 gap-2">
+                     <div className="flex-1 text-sm space-y-3 overflow-y-auto text-gray-700">
+                        <div className="grid grid-cols-2 gap-3">
                             <div>
                                 <span className="block text-gray-400 text-[10px] uppercase">Seguradora</span>
                                 <span className="font-semibold">{lead.dealInfo?.insurer}</span>
@@ -438,7 +438,7 @@ const LeadCard: React.FC<{ lead: Lead; onUpdate: (l: Lead) => void }> = ({ lead,
                                 <span className="font-semibold">{lead.dealInfo?.installments}</span>
                             </div>
                         </div>
-                        <div className="grid grid-cols-2 gap-2">
+                        <div className="grid grid-cols-2 gap-3">
                              <div>
                                 <span className="block text-gray-400 text-[10px] uppercase">Prêmio</span>
                                 <span className="font-semibold text-green-700">
@@ -450,11 +450,11 @@ const LeadCard: React.FC<{ lead: Lead; onUpdate: (l: Lead) => void }> = ({ lead,
                                 <span className="font-semibold">{lead.dealInfo?.commission}%</span>
                             </div>
                         </div>
-                        <div className="border-t border-gray-200 pt-1 mt-1">
+                        <div className="border-t border-gray-200 pt-2 mt-2">
                              <span className="block text-gray-400 text-[10px] uppercase">Vigência</span>
-                             <span className="font-medium">
+                             <span className="font-medium block mt-1">
                                 {formatDisplayDate(lead.dealInfo?.startDate)}
-                                <span className="mx-1 text-gray-400">até</span> 
+                                <span className="mx-2 text-gray-400">até</span> 
                                 {formatDisplayDate(lead.dealInfo?.endDate)}
                              </span>
                         </div>
@@ -463,7 +463,7 @@ const LeadCard: React.FC<{ lead: Lead; onUpdate: (l: Lead) => void }> = ({ lead,
             ) : (
                 // INPUTS VIEW (Editing)
                 <>
-                    <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wide border-b border-gray-200 pb-1">
+                    <h4 className="text-sm font-bold text-gray-500 uppercase tracking-wide border-b border-gray-200 pb-2">
                         Complemento
                     </h4>
                     
@@ -476,7 +476,7 @@ const LeadCard: React.FC<{ lead: Lead; onUpdate: (l: Lead) => void }> = ({ lead,
                                 type="datetime-local" 
                                 disabled={!isEditingStatus}
                                 className={`
-                                    w-full border rounded px-2 py-1.5 text-xs focus:ring-1 focus:ring-indigo-500 outline-none shadow-sm
+                                    w-full border rounded px-3 py-2 text-xs focus:ring-1 focus:ring-indigo-500 outline-none shadow-sm
                                     ${!isEditingStatus ? 'bg-gray-100 text-gray-500 border-gray-200 cursor-not-allowed' : 'bg-white border-gray-300'}
                                 `}
                                 value={scheduleDate}
@@ -492,7 +492,7 @@ const LeadCard: React.FC<{ lead: Lead; onUpdate: (l: Lead) => void }> = ({ lead,
                                 disabled={!isEditingStatus}
                                 placeholder="Insira os detalhes aqui..."
                                 className={`
-                                    w-full border rounded px-2 py-2 text-xs focus:ring-1 focus:ring-indigo-500 outline-none resize-none flex-1 shadow-inner
+                                    w-full border rounded px-3 py-3 text-xs focus:ring-1 focus:ring-indigo-500 outline-none resize-none flex-1 shadow-inner
                                     ${!isEditingStatus ? 'bg-gray-100 text-gray-500 border-gray-200 cursor-not-allowed' : 'bg-white border-gray-300'}
                                 `}
                                 value={observation}
@@ -794,7 +794,7 @@ export const LeadList: React.FC<LeadListProps> = ({ leads, onSelectLead, onUpdat
       </div>
 
       {/* List Layout - Stacked Cards */}
-      <div className="flex flex-col gap-3 pb-4 overflow-y-auto w-full max-w-4xl mx-auto px-1 flex-1">
+      <div className="flex flex-col gap-4 pb-4 overflow-y-auto w-full px-1 flex-1">
         {paginatedLeads.map((lead) => (
             <LeadCard 
                 key={lead.id} 
