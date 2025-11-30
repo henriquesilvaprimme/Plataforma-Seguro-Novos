@@ -33,18 +33,18 @@ export default function App() {
   // STATS
   const [manualRenewalTotal, setManualRenewalTotal] = useState<number>(0);
 
-  // USUÁRIO ATUAL - Persistência no LocalStorage
+  // USUÁRIO ATUAL - Persistência no SessionStorage (F5 ok, Fechar aba = Logout)
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
-      const savedUser = localStorage.getItem('currentUser');
+      const savedUser = sessionStorage.getItem('currentUser');
       return savedUser ? JSON.parse(savedUser) : null;
   });
 
-  // Salvar usuário no localStorage sempre que mudar
+  // Salvar usuário no sessionStorage sempre que mudar
   useEffect(() => {
       if (currentUser) {
-          localStorage.setItem('currentUser', JSON.stringify(currentUser));
+          sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
       } else {
-          localStorage.removeItem('currentUser');
+          sessionStorage.removeItem('currentUser');
       }
   }, [currentUser]);
 
@@ -244,7 +244,7 @@ export default function App() {
             <button 
                 onClick={() => {
                     setCurrentUser(null);
-                    localStorage.removeItem('currentUser');
+                    sessionStorage.removeItem('currentUser');
                     navigate('/');
                 }} 
                 className="text-slate-400 hover:text-white"
