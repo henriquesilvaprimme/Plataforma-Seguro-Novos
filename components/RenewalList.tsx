@@ -1,7 +1,6 @@
-
 import React, { useState, useEffect } from 'react';
 import { Lead, LeadStatus, User, DealInfo } from '../types';
-import { Car, Phone, Calendar, DollarSign, Percent, CreditCard, Users, RefreshCw, Bell, Search, Shield, AlertTriangle } from './Icons';
+import { Car, Phone, Calendar, DollarSign, Percent, CreditCard, Users, RefreshCw, Bell, Search, Shield, AlertTriangle, Edit, Check, Plus } from './Icons';
 
 interface RenewalListProps {
   leads: Lead[];
@@ -53,6 +52,7 @@ const RenewalCard: React.FC<{ lead: Lead, users: User[], onUpdate: (l: Lead) => 
     const [isEditingStatus, setIsEditingStatus] = useState(lead.status === LeadStatus.NEW);
     // FIX: Initialize based on whether there is an assigned user
     const [isEditingUser, setIsEditingUser] = useState(!lead.assignedTo);
+    const [isEditingNotes, setIsEditingNotes] = useState(false);
 
     const [selectedStatus, setSelectedStatus] = useState<LeadStatus | "">(""); 
     const [selectedUser, setSelectedUser] = useState<string>(lead.assignedTo || '');
@@ -142,6 +142,12 @@ const RenewalCard: React.FC<{ lead: Lead, users: User[], onUpdate: (l: Lead) => 
         };
         onUpdate(updatedLead);
         setIsEditingStatus(false);
+    };
+
+    const handleSaveNotes = () => {
+        const updatedLead = { ...lead, notes: observation };
+        onUpdate(updatedLead);
+        setIsEditingNotes(false);
     };
 
     const handleSaveDeal = () => {
@@ -458,13 +464,32 @@ const RenewalCard: React.FC<{ lead: Lead, users: User[], onUpdate: (l: Lead) => 
 
                     {needsObservation && (
                             <div className="flex-1 flex flex-col">
-                            <label className="text-[10px] font-bold text-gray-500 uppercase mb-0.5 block">Observações</label>
+                            <div className="flex justify-between items-end mb-0.5">
+                                <label className="text-[10px] font-bold text-gray-500 uppercase block">Observações</label>
+                                {!isEditingStatus && (
+                                    isEditingNotes ? (
+                                        <button 
+                                            onClick={handleSaveNotes}
+                                            className="flex items-center gap-1 text-[9px] font-bold text-green-600 bg-green-50 px-1.5 py-0.5 rounded border border-green-200 hover:bg-green-100"
+                                        >
+                                            <Check className="w-3 h-3" /> Confirmar
+                                        </button>
+                                    ) : (
+                                        <button 
+                                            onClick={() => setIsEditingNotes(true)}
+                                            className="flex items-center gap-1 text-[9px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200 hover:bg-blue-100"
+                                        >
+                                            <Edit className="w-3 h-3" /> Alterar
+                                        </button>
+                                    )
+                                )}
+                            </div>
                             <textarea 
-                                disabled={!isEditingStatus}
+                                disabled={!isEditingStatus && !isEditingNotes}
                                 placeholder="Insira os detalhes aqui..."
                                 className={`
                                     w-full border rounded px-2 py-2 text-xs focus:ring-1 focus:ring-indigo-500 outline-none resize-none flex-1 shadow-inner
-                                    ${!isEditingStatus ? 'bg-gray-100 text-gray-500 border-gray-200 cursor-not-allowed' : 'bg-white border-gray-300'}
+                                    ${(!isEditingStatus && !isEditingNotes) ? 'bg-gray-100 text-gray-500 border-gray-200 cursor-not-allowed' : 'bg-white border-gray-300'}
                                 `}
                                 value={observation}
                                 onChange={(e) => setObservation(e.target.value)}
@@ -607,6 +632,14 @@ export const RenewalList: React.FC<RenewalListProps> = ({ leads, users, onUpdate
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
+  // New Renewal State
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [newRenewalForm, setNewRenewalForm] = useState({
+      name: '', vehicleModel: '', vehicleYear: '', city: '', phone: '', insuranceType: 'Renovação', 
+      insurer: '', paymentMethod: '', netPremium: 0, commission: 0, installments: '', 
+      startDate: '', endDate: '', assignedTo: ''
+  });
+
   useEffect(() => { setCurrentPage(1); }, [searchTerm, filterStatus, filterDate]);
 
   const filteredLeads = leads.filter(lead => {
@@ -644,6 +677,40 @@ export const RenewalList: React.FC<RenewalListProps> = ({ leads, users, onUpdate
 
   const handleNextPage = () => { if (currentPage < totalPages) setCurrentPage(p => p + 1); };
   const handlePrevPage = () => { if (currentPage > 1) setCurrentPage(p => p - 1); };
+
+  const handleCreateRenewal = () => {
+      const newLead: Lead = {
+          id: Date.now().toString(),
+          name: newRenewalForm.name,
+          vehicleModel: newRenewalForm.vehicleModel,
+          vehicleYear: newRenewalForm.vehicleYear,
+          city: newRenewalForm.city,
+          phone: newRenewalForm.phone,
+          insuranceType: newRenewalForm.insuranceType,
+          assignedTo: newRenewalForm.assignedTo,
+          status: LeadStatus.NEW,
+          createdAt: new Date().toISOString(),
+          email: '', 
+          notes: '',
+          dealInfo: {
+              insurer: newRenewalForm.insurer,
+              paymentMethod: newRenewalForm.paymentMethod,
+              netPremium: newRenewalForm.netPremium,
+              commission: newRenewalForm.commission,
+              installments: newRenewalForm.installments,
+              startDate: newRenewalForm.startDate,
+              endDate: newRenewalForm.endDate,
+          }
+      };
+      // App.tsx handles sending this to 'renovacoes' based on insuranceType
+      onAddLead(newLead);
+      setShowCreateModal(false);
+      setNewRenewalForm({
+          name: '', vehicleModel: '', vehicleYear: '', city: '', phone: '', insuranceType: 'Renovação', 
+          insurer: '', paymentMethod: '', netPremium: 0, commission: 0, installments: '', 
+          startDate: '', endDate: '', assignedTo: ''
+      });
+  };
 
   return (
     <div className="h-full flex flex-col">
@@ -686,6 +753,17 @@ export const RenewalList: React.FC<RenewalListProps> = ({ leads, users, onUpdate
                 <option key={status} value={status}>{status}</option>
             ))}
           </select>
+
+          {/* Botão Nova Renovação apenas para Admin */}
+          {currentUser?.isAdmin && (
+            <button 
+                onClick={() => setShowCreateModal(true)}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded transition-all shadow-sm flex items-center justify-center gap-2 text-sm font-bold"
+            >
+                <Plus className="w-4 h-4" />
+                Nova Renovação
+            </button>
+          )}
         </div>
       </div>
 
@@ -726,6 +804,119 @@ export const RenewalList: React.FC<RenewalListProps> = ({ leads, users, onUpdate
             >
                 Próximo
             </button>
+        </div>
+      )}
+
+      {/* MODAL CRIAR RENOVAÇÃO */}
+      {showCreateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fade-in">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[95vh]">
+                <div className="bg-indigo-600 px-6 py-4 flex justify-between items-center">
+                    <h2 className="text-white font-bold text-lg flex items-center gap-2"><RefreshCw className="w-5 h-5" />Nova Renovação</h2>
+                    <button onClick={() => setShowCreateModal(false)} className="text-white/80 hover:text-white transition-colors">✕</button>
+                </div>
+                <div className="p-6 space-y-4 overflow-y-auto">
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Nome Completo</label>
+                            <input type="text" value={newRenewalForm.name} onChange={(e) => setNewRenewalForm({...newRenewalForm, name: e.target.value})} className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Telefone</label>
+                            <input type="text" value={newRenewalForm.phone} onChange={(e) => setNewRenewalForm({...newRenewalForm, phone: e.target.value})} className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-3 gap-4">
+                        <div>
+                            <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Modelo do Veículo</label>
+                            <input type="text" value={newRenewalForm.vehicleModel} onChange={(e) => setNewRenewalForm({...newRenewalForm, vehicleModel: e.target.value})} className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Ano/Modelo</label>
+                            <input type="text" value={newRenewalForm.vehicleYear} onChange={(e) => setNewRenewalForm({...newRenewalForm, vehicleYear: e.target.value})} className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Cidade</label>
+                            <input type="text" value={newRenewalForm.city} onChange={(e) => setNewRenewalForm({...newRenewalForm, city: e.target.value})} className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
+                        </div>
+                    </div>
+                    
+                    <div className="border-t border-gray-100 my-2 pt-2">
+                        <p className="text-xs font-bold text-indigo-600 mb-3 uppercase">Dados da Apólice Anterior</p>
+                        <div className="grid grid-cols-2 gap-4 mb-3">
+                            <div>
+                                <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Seguradora</label>
+                                <select 
+                                    value={newRenewalForm.insurer}
+                                    onChange={(e) => setNewRenewalForm({...newRenewalForm, insurer: e.target.value})}
+                                    className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
+                                >
+                                    <option value="">Selecione</option>
+                                    {INSURERS_LIST.map(ins => (
+                                        <option key={ins} value={ins}>{ins}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Meio de Pagamento</label>
+                                <select 
+                                    value={newRenewalForm.paymentMethod}
+                                    onChange={(e) => setNewRenewalForm({...newRenewalForm, paymentMethod: e.target.value})}
+                                    className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
+                                >
+                                    <option value="">Selecione</option>
+                                    <option value="Cartão Porto Seguro">Cartão Porto Seguro</option>
+                                    <option value="Cartão de Crédito">Cartão de Crédito</option>
+                                    <option value="Débito">Débito</option>
+                                    <option value="Boleto">Boleto</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-3 gap-4 mb-3">
+                            <div>
+                                <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Prêmio Líquido</label>
+                                <input type="number" value={newRenewalForm.netPremium || ''} onChange={(e) => setNewRenewalForm({...newRenewalForm, netPremium: Number(e.target.value)})} className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Comissão (%)</label>
+                                <input type="number" value={newRenewalForm.commission || ''} onChange={(e) => setNewRenewalForm({...newRenewalForm, commission: Number(e.target.value)})} className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Parcelamento</label>
+                                <select value={newRenewalForm.installments} onChange={(e) => setNewRenewalForm({...newRenewalForm, installments: e.target.value})} className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none bg-white">
+                                    <option value="">Selecione</option>
+                                    {Array.from({ length: 12 }, (_, i) => i + 1).map(num => (
+                                        <option key={num} value={`${num}x`}>{num}x</option>
+                                    ))}
+                                </select>
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4 mb-3">
+                            <div>
+                                <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Início Vigência</label>
+                                <input type="date" value={newRenewalForm.startDate} onChange={(e) => setNewRenewalForm({...newRenewalForm, startDate: e.target.value})} className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Final Vigência</label>
+                                <input type="date" value={newRenewalForm.endDate} onChange={(e) => setNewRenewalForm({...newRenewalForm, endDate: e.target.value})} className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
+                            </div>
+                        </div>
+                        <div>
+                             <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Responsável</label>
+                             <select value={newRenewalForm.assignedTo} onChange={(e) => setNewRenewalForm({...newRenewalForm, assignedTo: e.target.value})} className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none bg-white">
+                                <option value="">-- Selecione --</option>
+                                {users.filter(u => u.isActive).map(u => (
+                                    <option key={u.id} value={u.name}>{u.name}</option>
+                                ))}
+                             </select>
+                        </div>
+                    </div>
+                </div>
+                <div className="p-6 pt-0 flex gap-3 mt-auto bg-gray-50 border-t border-gray-100 py-4">
+                    <button onClick={() => setShowCreateModal(false)} className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded hover:bg-white hover:shadow-sm font-bold text-sm transition-all">Cancelar</button>
+                    <button onClick={handleCreateRenewal} disabled={!newRenewalForm.name} className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 font-bold text-sm shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed">Criar Renovação</button>
+                </div>
+            </div>
         </div>
       )}
     </div>
