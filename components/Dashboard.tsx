@@ -49,12 +49,25 @@ export const Dashboard: React.FC<DashboardProps> = ({ newLeadsData, renewalLeads
 
   const isAdmin = currentUser?.isAdmin;
 
-  const calculateMetrics = (subset: Lead[], isRenewalSection: boolean): Metrics => {
-    let total = subset.length;
-    if (isRenewalSection) {
-        total = manualRenewalTotal;
-    }
+  // Filtragem de dados para o usuário atual
+  const userFilter = (lead: Lead) => {
+    if (!currentUser) return false;
+    // Admin vê tudo? O pedido foi "Dashboard deve mostrar somente os contadores de cada usuario individualmente"
+    // Assumindo que até Admin vê seu dashboard individual, ou se quiser Global, teria que mudar aqui.
+    // Seguindo a risca: "cada usuario individualmente"
+    return lead.assignedTo === currentUser.name;
+  };
 
+  const filteredNewLeads = newLeadsData.filter(userFilter);
+  const filteredRenewalLeads = renewalLeadsData.filter(userFilter);
+
+  const calculateMetrics = (subset: Lead[], isRenewalSection: boolean): Metrics => {
+    // Total agora é baseado na contagem individual, ignorando o total manual global para a visão individual
+    let total = subset.length;
+    
+    // Se fosse visão global, usaríamos manualRenewalTotal em renovações. 
+    // Como é individual, usamos a contagem de leads atribuídos.
+    
     const closedDeals = subset.filter(l => l.status === LeadStatus.CLOSED);
     const sales = closedDeals.length;
     const lost = subset.filter(l => l.status === LeadStatus.LOST).length;
@@ -102,7 +115,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ newLeadsData, renewalLeads
     };
   };
 
-  const metrics = section === 'NEW' ? calculateMetrics(newLeadsData, false) : calculateMetrics(renewalLeadsData, true);
+  const metrics = section === 'NEW' 
+    ? calculateMetrics(filteredNewLeads, false) 
+    : calculateMetrics(filteredRenewalLeads, true);
 
   const pieData = [
     { name: 'Renovados', value: metrics.sales, color: '#16a34a' }, 
@@ -117,7 +132,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ newLeadsData, renewalLeads
       <div className="flex items-center justify-between bg-white p-4 rounded-xl shadow-sm border border-gray-100">
          <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
             <LayoutDashboard className="w-6 h-6 text-indigo-600" />
-            Dashboard
+            Dashboard ({currentUser?.name})
          </h1>
          
          <div className="flex items-center gap-4 bg-gray-50 rounded-lg p-1 border border-gray-200">
@@ -150,59 +165,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ newLeadsData, renewalLeads
                 <div className="flex justify-between items-start z-10 relative">
                     <div className="w-full">
                         <p className="text-sm text-gray-500 font-bold uppercase mb-1">
-                            {section === 'NEW' ? 'Total de Leads' : 'Total Renovações'}
+                            {section === 'NEW' ? 'Meus Leads' : 'Minhas Renovações'}
                         </p>
                         
-                        {section === 'RENEWAL' ? (
-                            <div className="flex items-center gap-2">
-                                {isEditingTotal ? (
-                                    <div className="flex items-center gap-2 mt-1 w-full">
-                                        <input 
-                                            type="number" 
-                                            className="w-full border border-indigo-300 rounded px-2 py-1 text-2xl font-extrabold text-gray-900 outline-none focus:ring-2 focus:ring-indigo-500"
-                                            value={editTotalValue}
-                                            onChange={(e) => setEditTotalValue(e.target.value)}
-                                            autoFocus
-                                            placeholder={metrics.total.toString()}
-                                        />
-                                        <button 
-                                            onClick={() => {
-                                                if(editTotalValue) onUpdateRenewalTotal(parseInt(editTotalValue));
-                                                setIsEditingTotal(false);
-                                            }}
-                                            className="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-lg text-xs font-bold transition-colors shadow-sm"
-                                        >
-                                            Confirmar
-                                        </button>
-                                    </div>
-                                ) : (
-                                    <div className="flex items-center gap-3">
-                                        <p className="text-3xl font-extrabold text-gray-900">{metrics.total}</p>
-                                        {/* Só permite alterar total se for Admin ou Renovações */}
-                                        {(isAdmin || currentUser?.isRenovations) && (
-                                            <button 
-                                                onClick={() => {
-                                                    setEditTotalValue(metrics.total.toString());
-                                                    setIsEditingTotal(true);
-                                                }}
-                                                className="text-[10px] uppercase font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-2 py-1 rounded border border-indigo-200 transition-colors"
-                                            >
-                                                Alterar
-                                            </button>
-                                        )}
-                                    </div>
-                                )}
-                            </div>
-                        ) : (
-                            <p className="text-3xl font-extrabold text-gray-900">{metrics.total}</p>
-                        )}
+                        <p className="text-3xl font-extrabold text-gray-900">{metrics.total}</p>
                     </div>
                     
-                    {!isEditingTotal && (
-                        <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg shrink-0 ml-2">
-                            <Users className="w-6 h-6" />
-                        </div>
-                    )}
+                    <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg shrink-0 ml-2">
+                        <Users className="w-6 h-6" />
+                    </div>
                 </div>
                 
                 {section === 'RENEWAL' ? (
@@ -253,7 +224,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ newLeadsData, renewalLeads
                              </div>
                              <div>
                                  <p className="text-xs text-gray-500 font-bold uppercase">
-                                    {section === 'NEW' ? 'Total Vendas' : 'Renovados'}
+                                    {section === 'NEW' ? 'Minhas Vendas' : 'Meus Renovados'}
                                  </p>
                                  <p className="text-2xl font-bold text-green-700">{metrics.sales}</p>
                              </div>
@@ -266,7 +237,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ newLeadsData, renewalLeads
                              </div>
                              <div>
                                  <p className="text-xs text-gray-500 font-bold uppercase">
-                                     {section === 'NEW' ? 'Leads Perdidos' : 'Perdidos'}
+                                     {section === 'NEW' ? 'Perdidos' : 'Não Renovados'}
                                  </p>
                                  <p className="text-2xl font-bold text-red-700">{metrics.lost}</p>
                              </div>
@@ -298,7 +269,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ newLeadsData, renewalLeads
 
         <h2 className="text-lg font-bold text-gray-800 mb-3 flex items-center gap-2">
             <Shield className="w-5 h-5 text-gray-400" />
-            Performance por Seguradora
+            Minha Performance por Seguradora
         </h2>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
             <div className="bg-white p-4 rounded-xl border border-blue-100 shadow-sm flex flex-col items-center">
@@ -321,7 +292,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ newLeadsData, renewalLeads
 
         <h2 className="text-lg font-bold text-gray-800 mb-3 flex items-center gap-2">
             <DollarSign className="w-5 h-5 text-gray-400" />
-            Financeiro
+            Meu Financeiro
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-center gap-4">
