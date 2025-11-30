@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Lead, LeadStatus, User, DealInfo } from '../types';
 import { Car, Phone, Calendar, DollarSign, Percent, CreditCard, Users, RefreshCw, Bell, Search, Shield } from './Icons';
@@ -571,7 +572,12 @@ export const RenewalList: React.FC<RenewalListProps> = ({ leads, users, onUpdate
     const name = lead.name || '';
     const phone = lead.phone || '';
     const matchesSearch = name.toLowerCase().includes(term) || phone.includes(term);
-    const matchesStatus = filterStatus === 'all' || lead.status === filterStatus;
+    
+    // Logica ajustada: Ocultar Perdidos se estiver vendo "Todos"
+    const matchesStatus = filterStatus === 'all' 
+        ? lead.status !== LeadStatus.LOST 
+        : lead.status === filterStatus;
+
     let matchesDate = true;
     if (filterDate && lead.createdAt) {
         if(lead.createdAt.includes('-') && !lead.createdAt.includes('/')) {
