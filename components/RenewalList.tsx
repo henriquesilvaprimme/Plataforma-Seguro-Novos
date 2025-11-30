@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Lead, LeadStatus, User, DealInfo } from '../types';
 import { Car, Phone, Calendar, DollarSign, Percent, CreditCard, Users, RefreshCw, Bell, Search, Shield } from './Icons';
@@ -217,16 +216,17 @@ const RenewalCard: React.FC<{ lead: Lead, users: User[], onUpdate: (l: Lead) => 
                 <div className="flex flex-col gap-0.5">
                     
                     <div className="flex justify-between items-start">
-                        <div className="flex flex-col gap-0.5">
-                            <div className="flex items-center gap-2">
+                        <div className="flex flex-col gap-0.5 w-full pr-6 relative">
+                            {/* Linha Combinada: Nome + Status + Agendamento */}
+                            <div className="flex items-center flex-wrap gap-2">
                                 <h3 className="font-bold text-base text-gray-900 leading-tight">{lead.name}</h3>
-                            </div>
-                            <div className="flex flex-wrap items-center gap-2 min-h-[16px]">
+                                
                                 {!isEditingStatus && lead.status !== LeadStatus.NEW && (
                                     <span className={`inline-block px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wide border ${getStatusColor(lead.status)}`}>
                                         {lead.status}
                                     </span>
                                 )}
+                                
                                 {lead.status === LeadStatus.SCHEDULED && lead.scheduledDate && !isEditingStatus && (
                                     <span className="text-[10px] font-medium text-purple-700 flex items-center gap-1 bg-purple-50 px-2 py-0.5 rounded-md border border-purple-200">
                                         <Calendar className="w-3 h-3" />
@@ -283,43 +283,46 @@ const RenewalCard: React.FC<{ lead: Lead, users: User[], onUpdate: (l: Lead) => 
                         </div>
 
                         <div className="mt-1">
-                            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5 block">
-                                Status do Lead
-                            </label>
-                            
-                            {isEditingStatus ? (
-                                <div className="flex gap-1">
-                                    <select 
-                                        className="w-36 bg-white border border-gray-300 text-xs rounded px-2 py-1 focus:ring-1 focus:ring-indigo-500 outline-none shadow-sm font-medium text-gray-700"
-                                        value={selectedStatus}
-                                        onChange={(e) => setSelectedStatus(e.target.value as LeadStatus)}
-                                    >
-                                        <option value="">-- Selecione --</option>
-                                        {Object.values(LeadStatus).map(s => (
-                                            <option key={s} value={s}>{s}</option>
-                                        ))}
-                                    </select>
-                                    <button 
-                                        onClick={handleConfirmStatus}
-                                        disabled={!isValidToSave()}
-                                        className={`
-                                            px-3 py-1 rounded text-xs font-bold transition-all shadow-sm border
-                                            ${isValidToSave() 
-                                                ? 'bg-green-600 hover:bg-green-700 text-white border-green-700' 
-                                                : 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'}
-                                        `}
-                                    >
-                                        Confirmar
-                                    </button>
+                            {isEditingStatus && (
+                                <div>
+                                    <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5 block">
+                                        Status do Lead
+                                    </label>
+                                    <div className="flex gap-1">
+                                        <select 
+                                            className="w-36 bg-white border border-gray-300 text-xs rounded px-2 py-1 focus:ring-1 focus:ring-indigo-500 outline-none shadow-sm font-medium text-gray-700"
+                                            value={selectedStatus}
+                                            onChange={(e) => setSelectedStatus(e.target.value as LeadStatus)}
+                                        >
+                                            <option value="">-- Selecione --</option>
+                                            {Object.values(LeadStatus).map(s => (
+                                                <option key={s} value={s}>{s}</option>
+                                            ))}
+                                        </select>
+                                        <button 
+                                            onClick={handleConfirmStatus}
+                                            disabled={!isValidToSave()}
+                                            className={`
+                                                px-3 py-1 rounded text-xs font-bold transition-all shadow-sm border
+                                                ${isValidToSave() 
+                                                    ? 'bg-green-600 hover:bg-green-700 text-white border-green-700' 
+                                                    : 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'}
+                                            `}
+                                        >
+                                            Confirmar
+                                        </button>
+                                    </div>
                                 </div>
-                            ) : (
+                            )}
+
+                            {!isEditingStatus && (
                                 <div className="flex items-center justify-between">
                                     {!isLocked && (
                                         <button 
                                             onClick={() => setIsEditingStatus(true)}
                                             className="bg-yellow-100 hover:bg-yellow-200 text-yellow-700 border border-yellow-300 px-3 py-1 rounded text-[10px] font-bold transition-colors shadow-sm uppercase tracking-wide w-auto"
                                         >
-                                            Alterar
+                                            Alterar Status
                                         </button>
                                     )}
                                 </div>
