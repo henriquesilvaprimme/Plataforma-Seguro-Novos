@@ -70,15 +70,15 @@ const RenewedCard: React.FC<{ lead: Lead, onUpdate: (l: Lead) => void }> = ({ le
             ${cardStyle} rounded-xl shadow-sm border transition-all duration-300 w-full text-sm relative
             ${isSplitView ? 'md:grid md:grid-cols-2' : 'flex flex-col'}
         `}>
-            
-            <div className={`p-6 flex flex-col justify-between ${isSplitView ? `border-r ${borderColor}` : ''}`}>
-                <div className="flex flex-col gap-5">
+            {/* REDUCED PADDING AND GAP */}
+            <div className={`p-3 flex flex-col justify-between gap-1 ${isSplitView ? `border-r ${borderColor}` : ''}`}>
+                <div className="flex flex-col gap-1">
                     
                     {/* Header: Name Only (Removed Status Badge and Insurance Type) */}
                     <div className="flex justify-between items-start">
-                        <div className="flex flex-col gap-1">
+                        <div className="flex flex-col gap-0.5">
                             <div className="flex items-center gap-2">
-                                <h3 className="font-bold text-xl text-gray-900 leading-tight">{lead.name}</h3>
+                                <h3 className="font-bold text-lg text-gray-900 leading-tight">{lead.name}</h3>
                             </div>
                             <div className="flex flex-wrap items-center gap-2 min-h-[20px]">
                                 {lead.status === LeadStatus.SCHEDULED && lead.scheduledDate && (
@@ -96,7 +96,7 @@ const RenewedCard: React.FC<{ lead: Lead, onUpdate: (l: Lead) => void }> = ({ le
                         )}
                     </div>
 
-                    <div className="flex flex-col gap-2 text-gray-800">
+                    <div className="flex flex-col gap-1 text-gray-800 text-sm">
                         <div className="flex items-center gap-2">
                             <Car className="w-4 h-4 text-gray-400 shrink-0" />
                             <span className="font-semibold text-gray-900">{lead.vehicleModel}</span>
@@ -159,8 +159,8 @@ const RenewedCard: React.FC<{ lead: Lead, onUpdate: (l: Lead) => void }> = ({ le
                     </div>
 
                     {/* RESPONSIBLE DISPLAY ONLY (No Edit) */}
-                    <div className="grid grid-cols-1 gap-2 pt-3 border-t border-green-200 mt-1">
-                        <div className="flex flex-col gap-1">
+                    <div className="grid grid-cols-1 gap-1 pt-2 border-t border-green-200 mt-1">
+                        <div className="flex flex-col gap-0.5">
                             <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1">
                                 <Users className="w-3 h-3" /> Responsável
                             </label>
@@ -174,7 +174,7 @@ const RenewedCard: React.FC<{ lead: Lead, onUpdate: (l: Lead) => void }> = ({ le
                     </div>
                 </div>
                  {/* Footer: Created At */}
-                <div className="mt-4 pt-3 flex items-center justify-end border-t border-green-200">
+                <div className="mt-2 pt-2 flex items-center justify-end border-t border-green-200">
                     <div className="text-[10px] text-gray-500 font-medium">
                         Criado em: {formatCreationDate(lead.createdAt)}
                     </div>
@@ -184,7 +184,7 @@ const RenewedCard: React.FC<{ lead: Lead, onUpdate: (l: Lead) => void }> = ({ le
             {/* Split view kept only for reading notes if they exist, but disabled */}
             {isSplitView && (
                 <div className={`
-                    p-6 flex flex-col gap-5 animate-fade-in border-l ${borderColor}
+                    p-3 flex flex-col gap-3 animate-fade-in border-l ${borderColor}
                 `}>
                     <h4 className="text-sm font-bold text-gray-500 uppercase tracking-wide border-b border-gray-200 pb-2">
                         Complemento
