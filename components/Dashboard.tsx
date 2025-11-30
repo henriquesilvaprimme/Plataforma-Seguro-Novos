@@ -210,7 +210,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ newLeadsData, renewalLeads
                         {section === 'RENEWAL' && isAdmin ? (
                             <div className="flex items-center gap-2">
                                 {isEditingTotal ? (
-                                    <div className="flex items-center gap-1">
+                                    <div className="flex items-center gap-2">
                                         <input 
                                             type="number" 
                                             value={tempTotal} 
@@ -218,18 +218,21 @@ export const Dashboard: React.FC<DashboardProps> = ({ newLeadsData, renewalLeads
                                             className="w-24 text-2xl font-extrabold text-gray-900 border-b-2 border-indigo-500 outline-none"
                                             autoFocus
                                         />
-                                        <button onClick={handleSaveTotal} className="p-1 bg-green-100 text-green-700 rounded hover:bg-green-200"><Check className="w-4 h-4"/></button>
-                                        <button onClick={() => setIsEditingTotal(false)} className="p-1 bg-red-100 text-red-700 rounded hover:bg-red-200"><XCircle className="w-4 h-4"/></button>
+                                        <button 
+                                            onClick={handleSaveTotal} 
+                                            className="px-3 py-1 bg-green-600 text-white text-xs font-bold rounded hover:bg-green-700 shadow-sm"
+                                        >
+                                            Confirmar
+                                        </button>
                                     </div>
                                 ) : (
-                                    <div className="flex items-center gap-2 group">
+                                    <div className="flex items-center gap-3">
                                         <p className="text-3xl font-extrabold text-gray-900">{manualRenewalTotal}</p>
                                         <button 
                                             onClick={() => { setTempTotal(manualRenewalTotal.toString()); setIsEditingTotal(true); }}
-                                            className="opacity-0 group-hover:opacity-100 transition-opacity p-1 text-gray-400 hover:text-indigo-600"
-                                            title="Editar Total Manual"
+                                            className="px-2 py-1 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded text-xs font-bold border border-gray-200"
                                         >
-                                            <Edit className="w-4 h-4" />
+                                            Alterar
                                         </button>
                                     </div>
                                 )}
