@@ -248,19 +248,19 @@ const RenewalCard: React.FC<{ lead: Lead, onUpdate: (l: Lead) => void, onAdd: (l
     return (
         <>
         <div className={`
-            ${cardStyle} rounded-lg shadow-sm border transition-all duration-300 w-full text-sm relative
+            ${cardStyle} rounded-xl shadow-sm border transition-all duration-300 w-full text-sm relative
             ${isSplitView ? 'md:grid md:grid-cols-2' : 'flex flex-col'}
         `}>
             
             {/* LEFT COLUMN: All Data + Controls */}
-            <div className={`p-3 flex flex-col justify-between ${isSplitView ? `border-r ${borderColor}` : ''}`}>
-                <div className="flex flex-col gap-3">
+            <div className={`p-6 flex flex-col justify-between ${isSplitView ? `border-r ${borderColor}` : ''}`}>
+                <div className="flex flex-col gap-5">
                     
                     {/* Header */}
                     <div className="flex justify-between items-start">
                         <div className="flex flex-col gap-1">
                             <div className="flex items-center gap-2">
-                                <h3 className="font-bold text-base text-gray-900 leading-tight">{lead.name}</h3>
+                                <h3 className="font-bold text-xl text-gray-900 leading-tight">{lead.name}</h3>
                             </div>
                             <div className="flex flex-wrap items-center gap-2 min-h-[20px]">
                                 {/* Using lead.status instead of selectedStatus to ensure badge reflects saved state, hiding if NEW */}
@@ -285,7 +285,7 @@ const RenewalCard: React.FC<{ lead: Lead, onUpdate: (l: Lead) => void, onAdd: (l
                     </div>
 
                     {/* Data Fields Stacked */}
-                    <div className="flex flex-col gap-1 text-gray-800">
+                    <div className="flex flex-col gap-2 text-gray-800">
                         {/* Vehicle */}
                         <div className="flex items-center gap-2">
                             <Car className="w-4 h-4 text-gray-400 shrink-0" />
@@ -329,7 +329,7 @@ const RenewalCard: React.FC<{ lead: Lead, onUpdate: (l: Lead) => void, onAdd: (l
                         </div>
 
                         {/* STATUS CONTROL */}
-                        <div className="mt-2">
+                        <div className="mt-3">
                             <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1 block">
                                 Status do Lead
                             </label>
@@ -373,7 +373,7 @@ const RenewalCard: React.FC<{ lead: Lead, onUpdate: (l: Lead) => void, onAdd: (l
                     </div>
 
                     {/* RESPONSIBLE CONTROL */}
-                    <div className="grid grid-cols-1 gap-2 pt-2 border-t border-gray-100 mt-1">
+                    <div className="grid grid-cols-1 gap-2 pt-3 border-t border-gray-100 mt-1">
                         <div className="flex flex-col gap-1">
                             <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1">
                                 <Users className="w-3 h-3" /> Responsável
@@ -400,7 +400,7 @@ const RenewalCard: React.FC<{ lead: Lead, onUpdate: (l: Lead) => void, onAdd: (l
                                     </button>
                                 </div>
                             ) : (
-                                <div className="flex items-center justify-between bg-gray-50 p-1.5 rounded border border-gray-200">
+                                <div className="flex items-center justify-between bg-gray-50 p-2 rounded border border-gray-200">
                                     <span className="text-xs font-bold text-gray-700 truncate mr-2">
                                         Atribuído para: <span className="text-indigo-700">{lead.assignedTo || 'Ninguém'}</span>
                                     </span>
@@ -417,7 +417,7 @@ const RenewalCard: React.FC<{ lead: Lead, onUpdate: (l: Lead) => void, onAdd: (l
                 </div>
 
                 {/* Footer: Created At */}
-                <div className="mt-3 pt-2 flex items-center justify-end border-t border-gray-200">
+                <div className="mt-4 pt-3 flex items-center justify-end border-t border-gray-200">
                     <div className="text-[10px] text-gray-400 font-medium">
                         Criado em: {formatCreationDate(lead.createdAt)}
                     </div>
@@ -427,10 +427,10 @@ const RenewalCard: React.FC<{ lead: Lead, onUpdate: (l: Lead) => void, onAdd: (l
             {/* RIGHT COLUMN: Conditional Inputs */}
             {isSplitView && (
                 <div className={`
-                    p-3 flex flex-col gap-3 animate-fade-in border-l
+                    p-6 flex flex-col gap-5 animate-fade-in border-l
                     ${lead.status === LeadStatus.CLOSED ? borderColor : `bg-gray-50 ${borderColor}`}
                 `}>
-                    <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wide border-b border-gray-200 pb-1">
+                    <h4 className="text-sm font-bold text-gray-500 uppercase tracking-wide border-b border-gray-200 pb-2">
                         Complemento
                     </h4>
                     
@@ -443,7 +443,7 @@ const RenewalCard: React.FC<{ lead: Lead, onUpdate: (l: Lead) => void, onAdd: (l
                                 type="datetime-local" 
                                 disabled={!isEditingStatus}
                                 className={`
-                                    w-full border rounded px-2 py-1.5 text-xs focus:ring-1 focus:ring-indigo-500 outline-none shadow-sm
+                                    w-full border rounded px-3 py-2 text-xs focus:ring-1 focus:ring-indigo-500 outline-none shadow-sm
                                     ${!isEditingStatus ? 'bg-gray-100 text-gray-500 border-gray-200 cursor-not-allowed' : 'bg-white border-gray-300'}
                                 `}
                                 value={scheduleDate}
@@ -459,7 +459,7 @@ const RenewalCard: React.FC<{ lead: Lead, onUpdate: (l: Lead) => void, onAdd: (l
                                 disabled={!isEditingStatus}
                                 placeholder="Insira os detalhes aqui..."
                                 className={`
-                                    w-full border rounded px-2 py-2 text-xs focus:ring-1 focus:ring-indigo-500 outline-none resize-none flex-1 shadow-inner
+                                    w-full border rounded px-3 py-3 text-xs focus:ring-1 focus:ring-indigo-500 outline-none resize-none flex-1 shadow-inner
                                     ${!isEditingStatus ? 'bg-gray-100 text-gray-500 border-gray-200 cursor-not-allowed' : 'bg-white border-gray-300'}
                                 `}
                                 value={observation}
@@ -687,7 +687,7 @@ export const RenewalList: React.FC<RenewalListProps> = ({ leads, onUpdateLead, o
       </div>
 
       {/* List Layout - Stacked Cards */}
-      <div className="flex flex-col gap-3 pb-4 overflow-y-auto w-full max-w-4xl mx-auto px-1 flex-1">
+      <div className="flex flex-col gap-4 pb-4 overflow-y-auto w-full px-1 flex-1">
         {paginatedLeads.map((lead) => (
             <RenewalCard 
                 key={lead.id} 
