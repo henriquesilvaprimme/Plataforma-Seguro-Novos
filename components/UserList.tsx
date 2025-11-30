@@ -35,7 +35,7 @@ const UserCard: React.FC<{ user: User; onUpdate: (u: User) => void }> = ({ user,
           <div className="flex justify-between items-start">
               <div className="flex items-center gap-3">
                   <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg shadow-sm shrink-0 ${user.avatarColor || 'bg-indigo-500'}`}>
-                      {user.name.charAt(0).toUpperCase()}
+                      {(user.name || 'U').charAt(0).toUpperCase()}
                   </div>
                   <div className="min-w-0">
                       <h3 className="font-bold text-gray-900 text-lg leading-tight truncate">{user.name}</h3>
@@ -127,11 +127,15 @@ export const UserList: React.FC<UserListProps> = ({ users, onUpdateUser, onAddUs
     isActive: true
   });
 
-  const filteredUsers = users.filter(user => 
-     user.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-     user.login.toLowerCase().includes(searchTerm.toLowerCase()) ||
-     user.email.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredUsers = users.filter(user => {
+     const name = user.name || '';
+     const login = user.login || '';
+     const email = user.email || '';
+     
+     return name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+            login.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            email.toLowerCase().includes(searchTerm.toLowerCase());
+  });
 
   const handleCreateUser = () => {
       if (!newUser.name || !newUser.login || !newUser.password) return;
