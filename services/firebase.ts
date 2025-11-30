@@ -134,6 +134,7 @@ export const mapDocumentToUser = (doc: any): User => {
         email: data.email || '',
         isActive: data.status === 'Ativo', 
         isAdmin: data.tipo === 'Admin',
+        isRenovations: data.isRenovations || data.tipo === 'Renovações' || false, // Garante leitura correta
         avatarColor: 'bg-indigo-600'
     } as User;
 };
@@ -142,6 +143,14 @@ export const mapDocumentToUser = (doc: any): User => {
 
 const mapAppToDb = (collectionName: string, data: any) => {
     if (collectionName === 'usuarios') {
+        // Lógica para definir o TIPO baseado nas flags
+        let tipoUsuario = 'Comum';
+        if (data.isAdmin) {
+            tipoUsuario = 'Admin';
+        } else if (data.isRenovations) {
+            tipoUsuario = 'Renovações';
+        }
+
         return {
             nome: data.name || '',
             usuario: data.login || '',
@@ -149,7 +158,8 @@ const mapAppToDb = (collectionName: string, data: any) => {
             email: data.email || '',
             id: data.id || '',
             status: data.isActive ? 'Ativo' : 'Inativo',
-            tipo: data.isAdmin ? 'Admin' : 'Comum',
+            tipo: tipoUsuario, // Salva como 'Renovações' se for o caso
+            isRenovations: data.isRenovations || false,
             updatedAt: new Date().toISOString()
         };
     }
