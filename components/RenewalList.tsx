@@ -214,14 +214,16 @@ const RenewalCard: React.FC<{ lead: Lead, onUpdate: (l: Lead) => void, onAdd: (l
         }
     };
 
-    // Define dynamic card style based on status
-    const cardStyle = (selectedStatus === LeadStatus.CLOSED || lead.status === LeadStatus.CLOSED)
+    // Define dynamic card style based on actual lead status, not just selected status to prevent premature coloring
+    const isClosed = lead.status === LeadStatus.CLOSED;
+    
+    const cardStyle = isClosed
       ? 'bg-green-50 border-green-200' 
       : (selectedStatus === LeadStatus.LOST || lead.status === LeadStatus.LOST)
         ? 'bg-red-50 border-red-200' 
         : 'bg-white border-gray-200';
     
-    const borderColor = (selectedStatus === LeadStatus.CLOSED || lead.status === LeadStatus.CLOSED) ? 'border-green-200' : 'border-gray-200';
+    const borderColor = isClosed ? 'border-green-200' : 'border-gray-200';
 
     return (
         <>
@@ -405,7 +407,7 @@ const RenewalCard: React.FC<{ lead: Lead, onUpdate: (l: Lead) => void, onAdd: (l
             {isSplitView && (
                 <div className={`
                     p-3 flex flex-col gap-3 animate-fade-in border-l
-                    ${selectedStatus === LeadStatus.CLOSED ? borderColor : `bg-gray-50 ${borderColor}`}
+                    ${isClosed ? borderColor : `bg-gray-50 ${borderColor}`}
                 `}>
                     <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wide border-b border-gray-200 pb-1">
                         Complemento
@@ -496,10 +498,10 @@ const RenewalCard: React.FC<{ lead: Lead, onUpdate: (l: Lead) => void, onAdd: (l
                                     className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-green-500 outline-none bg-white"
                                  >
                                     <option value="">Selecione</option>
+                                    <option value="Cartão Porto Seguro">Cartão Porto Seguro</option>
                                     <option value="Cartão de Crédito">Cartão de Crédito</option>
+                                    <option value="Débito">Débito</option>
                                     <option value="Boleto">Boleto</option>
-                                    <option value="Débito em Conta">Débito em Conta</option>
-                                    <option value="Pix">Pix</option>
                                  </select>
                             </div>
                         </div>
@@ -536,10 +538,9 @@ const RenewalCard: React.FC<{ lead: Lead, onUpdate: (l: Lead) => void, onAdd: (l
                             >
                                 <option value="">Selecione</option>
                                 <option value="À Vista">À Vista</option>
-                                <option value="4x Sem Juros">4x Sem Juros</option>
-                                <option value="6x Sem Juros">6x Sem Juros</option>
-                                <option value="10x Sem Juros">10x Sem Juros</option>
-                                <option value="12x Com Juros">12x Com Juros</option>
+                                {Array.from({ length: 12 }, (_, i) => i + 1).map(num => (
+                                    <option key={num} value={`${num}x`}>{num}x</option>
+                                ))}
                             </select>
                         </div>
 
