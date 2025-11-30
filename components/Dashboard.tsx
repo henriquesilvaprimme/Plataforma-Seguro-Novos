@@ -273,33 +273,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ newLeadsData, renewalLeads
                     </div>
                 </div>
                 
-                {section === 'RENEWAL' ? (
-                     <div className="mt-1 h-16 flex items-center justify-center relative">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <PieChart>
-                                <Pie
-                                    data={pieData}
-                                    cx="50%"
-                                    cy="50%"
-                                    innerRadius={20}
-                                    outerRadius={30}
-                                    paddingAngle={2}
-                                    dataKey="value"
-                                    startAngle={90}
-                                    endAngle={-270}
-                                >
-                                    {pieData.map((entry, index) => (
-                                        <Cell key={`cell-${index}`} fill={entry.color} />
-                                    ))}
-                                </Pie>
-                            </PieChart>
-                        </ResponsiveContainer>
-                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                            <span className="text-[10px] font-bold text-gray-600">{metrics.conversionRate.toFixed(0)}%</span>
-                        </div>
-                        <p className="absolute bottom-0 right-0 text-[9px] text-gray-400 font-medium">Conv.</p>
-                     </div>
-                ) : (
+                {/* Progress bar displayed ONLY for NEW section */}
+                {section === 'NEW' && (
                     <div className="mt-2">
                         <div className="w-full bg-gray-100 rounded-full h-1.5 mb-1">
                             <div className="bg-indigo-500 h-1.5 rounded-full" style={{ width: `${metrics.conversionRate}%` }}></div>
@@ -357,6 +332,39 @@ export const Dashboard: React.FC<DashboardProps> = ({ newLeadsData, renewalLeads
                         <div className="border-t border-gray-50 pt-2">
                              <p className="text-[10px] text-gray-500 font-bold uppercase mb-0.5">Sem Contato</p>
                              <p className="text-xl font-bold text-gray-400">{metrics.noContact}</p>
+                        </div>
+                     </div>
+                </div>
+            )}
+
+            {section === 'RENEWAL' && (
+                <div className="bg-white p-3 rounded-lg shadow-sm border border-gray-100 flex flex-col justify-center h-36 relative">
+                     <p className="text-[10px] text-gray-500 font-bold uppercase absolute top-3 left-3">
+                        Taxa de Renovação
+                     </p>
+                     <div className="h-full flex items-center justify-center relative pt-2">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                                <Pie
+                                    data={pieData}
+                                    cx="50%"
+                                    cy="50%"
+                                    innerRadius={25}
+                                    outerRadius={35}
+                                    paddingAngle={2}
+                                    dataKey="value"
+                                    startAngle={90}
+                                    endAngle={-270}
+                                >
+                                    {pieData.map((entry, index) => (
+                                        <Cell key={`cell-${index}`} fill={entry.color} />
+                                    ))}
+                                </Pie>
+                                <Tooltip />
+                            </PieChart>
+                        </ResponsiveContainer>
+                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none pt-2">
+                            <span className="text-sm font-bold text-gray-600">{metrics.conversionRate.toFixed(0)}%</span>
                         </div>
                      </div>
                 </div>
