@@ -577,10 +577,15 @@ export const RenewalList: React.FC<RenewalListProps> = ({ leads, users, onUpdate
       : lead.status === filterStatus; // Se selecionou 'LOST', mostra
 
     let matchesDate = true;
-    if (filterDate && lead.createdAt) {
-        if(lead.createdAt.includes('-') && !lead.createdAt.includes('/')) {
-            matchesDate = lead.createdAt.startsWith(filterDate);
-        } else { matchesDate = true; }
+    if (filterDate) {
+        // Filtra pela Vigência Final (Mês de Renovação)
+        const endDate = lead.dealInfo?.endDate || '';
+        if (endDate && endDate.includes('-')) {
+             matchesDate = endDate.startsWith(filterDate);
+        } else {
+             // Se não tiver data de vigência final e o filtro estiver ativo, considera false.
+             matchesDate = false;
+        }
     }
 
     const isAssignedToUser = !currentUser || currentUser.isAdmin || lead.assignedTo === currentUser.name;
