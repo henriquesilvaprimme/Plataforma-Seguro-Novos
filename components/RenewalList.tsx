@@ -575,11 +575,17 @@ export const RenewalList: React.FC<RenewalListProps> = ({ leads, users, onUpdate
             matchesDate = lead.createdAt.startsWith(filterDate);
         } else { matchesDate = true; }
     }
-    return matchesSearch && matchesStatus && matchesDate;
+
+    // Filtro de Permissão: Se Admin vê tudo, caso contrário só vê os atribuídos a si mesmo
+    const isAssignedToUser = !currentUser || currentUser.isAdmin || lead.assignedTo === currentUser.name;
+
+    return matchesSearch && matchesStatus && matchesDate && isAssignedToUser;
   }).sort((a, b) => {
-      const dateA = new Date(a.createdAt).getTime();
-      const dateB = new Date(b.createdAt).getTime();
-      return dateB - dateA;
+      // Ordenação por Vigência Final (Crescente: 01/12 -> 31/12)
+      // Se não tiver data, joga pro final
+      const dateA = new Date(a.dealInfo?.endDate || '9999-12-31').getTime();
+      const dateB = new Date(b.dealInfo?.endDate || '9999-12-31').getTime();
+      return dateA - dateB;
   });
 
   const totalPages = Math.ceil(filteredLeads.length / itemsPerPage);
