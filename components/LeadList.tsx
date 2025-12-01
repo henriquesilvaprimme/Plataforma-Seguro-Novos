@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Lead, LeadStatus, User, DealInfo } from '../types';
 import { Search, Plus, Car, Calendar, MapPin, Shield, Phone, BrainCircuit, Users, Bell, ChevronRight, Edit, Check } from './Icons';
@@ -538,9 +539,9 @@ const LeadCard: React.FC<{ lead: Lead; users: User[]; onUpdate: (l: Lead) => voi
                                 className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-green-500 outline-none bg-white"
                              >
                                 <option value="">Selecione</option>
-                                <option value="Cartão Porto Seguro">Cartão Porto Seguro</option>
-                                <option value="Cartão de Crédito">Cartão de Crédito</option>
-                                <option value="Débito">Débito</option>
+                                <option value="CP">Cartão Porto Seguro</option>
+                                <option value="CC">Cartão de Crédito</option>
+                                <option value="Debito">Débito</option>
                                 <option value="Boleto">Boleto</option>
                              </select>
                         </div>
