@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import { Lead, LeadStatus, User } from '../types';
@@ -63,9 +64,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ newLeadsData, renewalLeads
   };
 
   // Lógica de Filtro de Data (Universo)
-  const dateFilter = (lead: Lead) => {
+  const dateFilter = (lead: Lead, isRenewalLogic: boolean) => {
       if (!filterDate) return true;
-      if (section === 'NEW') {
+      if (!isRenewalLogic) {
           // Para Leads Novos: Filtra rigorosamente pela data de criação
           return lead.createdAt && lead.createdAt.startsWith(filterDate);
       } else {
@@ -74,20 +75,33 @@ export const Dashboard: React.FC<DashboardProps> = ({ newLeadsData, renewalLeads
       }
   };
 
-  const filteredNewLeads = newLeadsData.filter(userFilter).filter(l => section === 'NEW' ? dateFilter(l) : true);
-  const filteredRenewalLeads = renewalLeadsData.filter(userFilter).filter(l => section === 'RENEWAL' ? dateFilter(l) : true);
+  // --- LOGIC CHANGE: Split based on 'Renovação Primme' vs Others ---
+  // Combine all passed data first to ensure we catch cross-pollination
+  const allLeads = [...newLeadsData, ...renewalLeadsData];
+
+  // 1. Leads for 'RENEWAL' Section (Only 'Renovação Primme')
+  const filteredRenewalLeads = allLeads
+    .filter(l => l.insuranceType === 'Renovação Primme')
+    .filter(userFilter)
+    .filter(l => dateFilter(l, true));
+
+  // 2. Leads for 'NEW' Section (Everything else: Novo, Indicação, and 'Renovação' standard)
+  const filteredNewLeads = allLeads
+    .filter(l => l.insuranceType !== 'Renovação Primme')
+    .filter(userFilter)
+    .filter(l => dateFilter(l, false));
 
   // Lógica Específica para "Renovados" (Vendas na aba Renovações)
   // Deve buscar leads com status CLOSED e closedAt correspondente ao filtro
-  const renewalSalesSpecificCount = renewalLeadsData.filter(l => {
-      const matchesUser = userFilter(l);
+  // Agora apenas dentro do universo 'Renovação Primme'
+  const renewalSalesSpecificCount = filteredRenewalLeads.filter(l => {
       const isClosed = l.status === LeadStatus.CLOSED;
       // Filtra por closedAt se o lead tiver essa data, caso contrário tenta usar startDate como fallback ou falha
       const matchesClosedDate = l.closedAt 
           ? l.closedAt.startsWith(filterDate) 
           : (l.dealInfo?.startDate && l.dealInfo.startDate.startsWith(filterDate)); // Fallback para leads antigos sem closedAt
       
-      return matchesUser && isClosed && matchesClosedDate;
+      return isClosed && matchesClosedDate;
   }).length;
 
   const calculateMetrics = (subset: Lead[], isRenewalSection: boolean): Metrics => {
@@ -124,7 +138,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ newLeadsData, renewalLeads
     // se for renovação, devemos usar os leads que compõem o número de vendas (renewalSalesSpecificCount)
     // Se for novo, usa o subset (que já está filtrado por createdAt)
     const leadsForStats = isRenewalSection 
-        ? renewalLeadsData.filter(l => userFilter(l) && l.status === LeadStatus.CLOSED && (l.closedAt ? l.closedAt.startsWith(filterDate) : (l.dealInfo?.startDate && l.dealInfo.startDate.startsWith(filterDate))))
+        ? filteredRenewalLeads.filter(l => l.status === LeadStatus.CLOSED && (l.closedAt ? l.closedAt.startsWith(filterDate) : (l.dealInfo?.startDate && l.dealInfo.startDate.startsWith(filterDate))))
         : subset.filter(l => l.status === LeadStatus.CLOSED);
 
     leadsForStats.forEach(lead => {
