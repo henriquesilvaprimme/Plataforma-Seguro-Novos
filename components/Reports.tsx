@@ -1,3 +1,4 @@
+
 import React, { useMemo, useState } from 'react';
 import { Lead, LeadStatus } from '../types';
 import { FileBarChart2, DollarSign, Percent, CreditCard, FileText, Shield, RefreshCw, Plus, Calendar } from './Icons';
@@ -5,35 +6,12 @@ import { FileBarChart2, DollarSign, Percent, CreditCard, FileText, Shield, Refre
 interface ReportsProps {
   leads: Lead[];
   renewed: Lead[];
+  renewals?: Lead[]; // Optional to support App changes
 }
 
-export const Reports: React.FC<ReportsProps> = ({ leads, renewed }) => {
+export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [] }) => {
   // 1. Filter Date State (Default: Current Month)
   const [filterDate, setFilterDate] = useState(() => new Date().toISOString().slice(0, 7));
-
-  // 2. Filter Leads based on Status and Date
-  const closedLeads = useMemo(() => {
-    const all = [...leads, ...renewed];
-    return all.filter(l => {
-        // Must be Closed and have Deal Info
-        const isClosed = l.status === LeadStatus.CLOSED && !!l.dealInfo;
-        if (!isClosed) return false;
-        
-        // Date Check (Prioritize startDate, then closedAt)
-        const dateToCheck = l.dealInfo?.startDate || l.closedAt || '';
-        if (!dateToCheck) return false;
-
-        // Normalize Date to YYYY-MM for comparison
-        let normalizedDate = dateToCheck;
-        if (dateToCheck.includes('/')) {
-             const [d, m, y] = dateToCheck.split('/');
-             normalizedDate = `${y}-${m}-${d}`;
-        }
-        
-        // Filter by selected Month/Year
-        return normalizedDate.startsWith(filterDate);
-    });
-  }, [leads, renewed, filterDate]);
 
   // Helper to extract number of installments
   const getInstallments = (str?: string) => {
@@ -43,13 +21,13 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed }) => {
   };
 
   // Helper: Calculate Commission Logic based on Payment Method
-  const calculateFinalCommission = (info: any) => {
-      const premium = info.netPremium || 0;
-      const commPct = info.commission || 0;
+  const calculateFinalCommission = (netPremium: number, commissionPct: number, paymentMethod: string, installmentsStr: string) => {
+      const premium = netPremium || 0;
+      const commPct = commissionPct || 0;
       const baseValue = premium * (commPct / 100);
       
-      const method = (info.paymentMethod || '').toUpperCase();
-      const inst = getInstallments(info.installments);
+      const method = (paymentMethod || '').toUpperCase();
+      const inst = getInstallments(installmentsStr);
 
       // Rules applied to the Base Commission Value
       let finalValue = baseValue;
@@ -67,7 +45,79 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed }) => {
       return { baseValue, finalValue };
   };
 
-  // 3. Metrics Calculation (Split by Type + General)
+  // 2. Aggregate all reportable items (Sales + Endorsements)
+  const reportItems = useMemo(() => {
+    const items: any[] = [];
+    // Combine all sources
+    const allLeads = [...leads, ...renewed, ...renewals];
+    
+    // Deduplicate if necessary (though collections should be distinct usually)
+    const seenIds = new Set();
+    const uniqueLeads = allLeads.filter(l => {
+        if (seenIds.has(l.id)) return false;
+        seenIds.add(l.id);
+        return true;
+    });
+
+    uniqueLeads.forEach(lead => {
+        // A. Main Deal (Sale)
+        // Check if Closed AND has DealInfo
+        if (lead.status === LeadStatus.CLOSED && lead.dealInfo) {
+            const dateToCheck = lead.dealInfo.startDate || lead.closedAt || '';
+            let normalizedDate = dateToCheck;
+            if (dateToCheck.includes('/')) {
+                 const [d, m, y] = dateToCheck.split('/');
+                 normalizedDate = `${y}-${m}-${d}`;
+            }
+
+            if (normalizedDate.startsWith(filterDate)) {
+                 items.push({
+                     type: 'SALE',
+                     subtype: lead.insuranceType || 'Novo',
+                     leadName: lead.name,
+                     insurer: lead.dealInfo.insurer,
+                     netPremium: lead.dealInfo.netPremium,
+                     commissionPct: lead.dealInfo.commission,
+                     installments: lead.dealInfo.installments,
+                     paymentMethod: lead.dealInfo.paymentMethod,
+                     startDate: lead.dealInfo.startDate,
+                     id: lead.id
+                 });
+            }
+        }
+
+        // B. Endorsements
+        if (lead.endorsements && lead.endorsements.length > 0) {
+            lead.endorsements.forEach((end, idx) => {
+                const dateToCheck = end.startDate; // Endorsement Date
+                let normalizedDate = dateToCheck;
+                 if (dateToCheck.includes('/')) {
+                     const [d, m, y] = dateToCheck.split('/');
+                     normalizedDate = `${y}-${m}-${d}`;
+                }
+
+                if (normalizedDate.startsWith(filterDate)) {
+                    items.push({
+                        type: 'ENDORSEMENT',
+                        subtype: 'Endosso',
+                        leadName: lead.name,
+                        insurer: lead.dealInfo?.insurer || 'Endosso', // Usually same insurer
+                        netPremium: end.netPremium,
+                        commissionPct: end.commission,
+                        installments: end.installments,
+                        paymentMethod: end.paymentMethod,
+                        startDate: end.startDate,
+                        id: `${lead.id}_END_${idx}`
+                    });
+                }
+            });
+        }
+    });
+
+    return items;
+  }, [leads, renewed, renewals, filterDate]);
+
+  // 3. Metrics Calculation
   const metrics = useMemo(() => {
     const data = {
         general: { premium: 0, commission: 0, count: 0, commPctSum: 0 },
@@ -75,47 +125,56 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed }) => {
         renewal: { premium: 0, commission: 0, count: 0, commPctSum: 0, insurers: { porto: 0, azul: 0, itau: 0, others: 0 } }
     };
 
-    closedLeads.forEach(lead => {
-        const info = lead.dealInfo!;
-        const { finalValue } = calculateFinalCommission(info);
-        const premium = info.netPremium || 0;
-        const commPct = info.commission || 0;
+    reportItems.forEach(item => {
+        const { finalValue } = calculateFinalCommission(item.netPremium, item.commissionPct, item.paymentMethod, item.installments);
         
-        const type = (lead.insuranceType || '').toLowerCase();
-        // Check for renewal flag or type string
-        const isRenewal = type.includes('renova') || lead.id.includes('renewed') || lead.id.includes('renewal');
+        // General Accumulation
+        data.general.premium += item.netPremium || 0;
+        data.general.commission += finalValue;
+        
+        // Exclude Endorsements from the general "Itens Produzidos" count per request
+        if (item.type !== 'ENDORSEMENT') {
+            data.general.count++;
+            data.general.commPctSum += item.commissionPct || 0; // Keeping commission pct logic consistent with count
+        }
 
-        // Select Target Bucket
-        const target = isRenewal ? data.renewal : data.new;
-        const gen = data.general;
+        // Bucket Determination
+        let target;
+        // Logic change: Only "Renovação Primme" goes to Renewal bucket. Everything else (including standard Renovação) goes to New bucket.
+        if (item.subtype === 'Renovação Primme') {
+            target = data.renewal;
+        } else if (item.type !== 'ENDORSEMENT') {
+            // Endorsements are not added to New/Renewal buckets to avoid skewing ticket average, 
+            // unless explicit instruction given. Typically Endorsements affect total premium but not item count.
+            // If we want Endorsements to affect Premium of a bucket but not count, we need separate logic.
+            // Assuming Endorsements just go to General Total as requested ("premio liquido dessa sessao").
+            // For standard Sales (Novo, Renovação, Indicação):
+            target = data.new;
+        } else {
+            target = null;
+        }
 
-        // Update Target Metrics
-        target.premium += premium;
-        target.commission += finalValue;
-        target.count++;
-        target.commPctSum += commPct;
+        if (target) {
+            target.premium += item.netPremium || 0;
+            target.commission += finalValue;
+            target.count++;
+            target.commPctSum += item.commissionPct || 0;
 
-        // Update Insurer Counts for Target
-        const insurer = (info.insurer || '').toLowerCase();
-        if (insurer.includes('porto')) target.insurers.porto++;
-        else if (insurer.includes('azul')) target.insurers.azul++;
-        else if (insurer.includes('itau') || insurer.includes('itaú')) target.insurers.itau++;
-        else target.insurers.others++;
-
-        // Update General Metrics
-        gen.premium += premium;
-        gen.commission += finalValue;
-        gen.count++;
-        gen.commPctSum += commPct;
+            const insurer = (item.insurer || '').toLowerCase();
+            if (insurer.includes('porto')) target.insurers.porto++;
+            else if (insurer.includes('azul')) target.insurers.azul++;
+            else if (insurer.includes('itau') || insurer.includes('itaú')) target.insurers.itau++;
+            else target.insurers.others++;
+        }
     });
 
     return data;
-  }, [closedLeads]);
+  }, [reportItems]);
 
   // Averages Helpers
   const getAvg = (val: number, count: number) => count > 0 ? val / count : 0;
 
-  // Formatter for Display in EXCEL
+  // Formatter for Display
   const formatMoney = (val: number) => val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   const formatNumber = (val: number) => val.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   
@@ -131,26 +190,25 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed }) => {
     };
 
     // Construct HTML Rows
-    const tableRows = closedLeads.map(lead => {
-        const info = lead.dealInfo!;
-        const { baseValue, finalValue } = calculateFinalCommission(info);
+    const tableRows = reportItems.map(item => {
+        const { baseValue, finalValue } = calculateFinalCommission(item.netPremium, item.commissionPct, item.paymentMethod, item.installments);
         
-        let payMethodShort = info.paymentMethod || '-';
+        let payMethodShort = item.paymentMethod || '-';
         if (payMethodShort.toUpperCase().includes('PORTO')) payMethodShort = 'CP';
         else if (payMethodShort.toUpperCase().includes('CRÉDITO')) payMethodShort = 'CC';
 
         return `
             <tr>
-                <td>${lead.id}</td>
-                <td>${fmtDate(info.startDate)}</td>
-                <td>${lead.insuranceType}</td>
-                <td>${lead.name}</td>
-                <td>${info.insurer}</td>
-                <td class="currency-fmt">${formatMoney(info.netPremium)}</td>
-                <td class="number-fmt">${formatNumber(info.commission)}</td>
+                <td>${item.id}</td>
+                <td>${fmtDate(item.startDate)}</td>
+                <td>${item.subtype}</td>
+                <td>${item.leadName}</td>
+                <td>${item.insurer}</td>
+                <td class="currency-fmt">${formatMoney(item.netPremium)}</td>
+                <td class="number-fmt">${formatNumber(item.commissionPct)}</td>
                 <td class="currency-fmt">${formatMoney(baseValue)}</td>
                 <td>${payMethodShort}</td>
-                <td>${info.installments}</td>
+                <td>${item.installments}</td>
                 <td class="currency-fmt" style="background-color: #e2efda; font-weight: bold;">${formatMoney(finalValue)}</td>
             </tr>
         `;
@@ -178,15 +236,16 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed }) => {
                 
                 <!-- GERAL -->
                 <tr><td colspan="11" class="spacer">&nbsp;</td></tr>
-                <tr><td colspan="4" class="subheader-kpi">RESUMO GERAL</td></tr>
+                <tr><td colspan="4" class="subheader-kpi">RESUMO GERAL (Vendas + Endossos)</td></tr>
                 <tr>
                     <td>PRÊMIO LÍQ. TOTAL</td> <td class="value-kpi currency-fmt">${formatMoney(metrics.general.premium)}</td>
                     <td>COMISSÃO TOTAL</td> <td class="value-kpi currency-fmt">${formatMoney(metrics.general.commission)}</td>
+                    <td>ITENS PRODUZIDOS</td> <td class="value-kpi">${metrics.general.count}</td>
                 </tr>
 
                 <!-- SEGURO NOVO -->
                 <tr><td colspan="11" class="spacer">&nbsp;</td></tr>
-                <tr><td colspan="4" class="subheader-kpi">SEGURO NOVO</td></tr>
+                <tr><td colspan="4" class="subheader-kpi">SEGURO NOVO (Inclui Renovações de Mercado)</td></tr>
                 <tr>
                     <td>PRÊMIO LÍQUIDO</td> <td class="value-kpi currency-fmt">${formatMoney(metrics.new.premium)}</td>
                     <td>COMISSÃO</td> <td class="value-kpi currency-fmt">${formatMoney(metrics.new.commission)}</td>
@@ -196,7 +255,7 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed }) => {
 
                 <!-- RENOVAÇÃO -->
                 <tr><td colspan="11" class="spacer">&nbsp;</td></tr>
-                <tr><td colspan="4" class="subheader-kpi">RENOVAÇÕES</td></tr>
+                <tr><td colspan="4" class="subheader-kpi">RENOVAÇÕES PRIMME</td></tr>
                 <tr>
                     <td>PRÊMIO LÍQUIDO</td> <td class="value-kpi currency-fmt">${formatMoney(metrics.renewal.premium)}</td>
                     <td>COMISSÃO</td> <td class="value-kpi currency-fmt">${formatMoney(metrics.renewal.commission)}</td>
@@ -267,7 +326,7 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed }) => {
 
              <button 
                 onClick={handleExport}
-                disabled={closedLeads.length === 0}
+                disabled={reportItems.length === 0}
                 className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-bold shadow-sm flex items-center gap-2 transition-all disabled:opacity-50 text-sm"
             >
                 <FileText className="w-4 h-4" />
@@ -281,7 +340,7 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed }) => {
            {/* 1. RESUMO GERAL */}
            <section>
                <h3 className="text-sm font-bold text-gray-600 uppercase tracking-wide mb-3 flex items-center gap-2">
-                   <Shield className="w-4 h-4" /> Resumo Geral (Novo + Renovação)
+                   <Shield className="w-4 h-4" /> Resumo Geral (Novo + Renovação + Endossos)
                </h3>
                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                    <div className="bg-gradient-to-br from-indigo-600 to-indigo-700 p-4 rounded-xl shadow-lg text-white">
@@ -303,8 +362,9 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed }) => {
                        </div>
                    </div>
                    <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col justify-center items-center">
-                       <p className="text-xs font-bold text-gray-400 uppercase">Itens Fechados</p>
+                       <p className="text-xs font-bold text-gray-400 uppercase">Itens Produzidos</p>
                        <p className="text-3xl font-extrabold text-gray-800 mt-1">{metrics.general.count}</p>
+                       <p className="text-[10px] text-gray-400">Vendas (Novo + Renovação)</p>
                    </div>
                </div>
            </section>
@@ -314,7 +374,7 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed }) => {
                {/* 2. SEGURO NOVO */}
                <section className="bg-blue-50/50 p-4 rounded-xl border border-blue-100">
                    <h3 className="text-sm font-bold text-blue-800 uppercase tracking-wide mb-3 flex items-center gap-2">
-                       <Plus className="w-4 h-4" /> Seguro Novo
+                       <Plus className="w-4 h-4" /> Seguro Novo (Inclui Renovações Mercado)
                    </h3>
                    <div className="grid grid-cols-2 gap-3 mb-4">
                        <div className="bg-white p-3 rounded-lg border border-blue-100 shadow-sm">
@@ -367,7 +427,7 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed }) => {
                {/* 3. RENOVAÇÕES */}
                <section className="bg-indigo-50/50 p-4 rounded-xl border border-indigo-100">
                    <h3 className="text-sm font-bold text-indigo-800 uppercase tracking-wide mb-3 flex items-center gap-2">
-                       <RefreshCw className="w-4 h-4" /> Renovações
+                       <RefreshCw className="w-4 h-4" /> Renovações Primme
                    </h3>
                    <div className="grid grid-cols-2 gap-3 mb-4">
                        <div className="bg-white p-3 rounded-lg border border-indigo-100 shadow-sm">
