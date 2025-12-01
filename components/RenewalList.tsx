@@ -654,7 +654,6 @@ export const RenewalList: React.FC<RenewalListProps> = ({ leads, users, onUpdate
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
-  // FIX: Add missing state for Create Modal
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newRenewalForm, setNewRenewalForm] = useState({
       name: '',
@@ -680,7 +679,7 @@ export const RenewalList: React.FC<RenewalListProps> = ({ leads, users, onUpdate
         vehicleYear: newRenewalForm.vehicleYear,
         city: newRenewalForm.city,
         phone: newRenewalForm.phone,
-        insuranceType: 'Renovação',
+        insuranceType: 'Renovação Primme', // Força o tipo correto
         status: LeadStatus.NEW,
         assignedTo: newRenewalForm.assignedTo,
         createdAt: new Date().toISOString(),
@@ -720,8 +719,9 @@ export const RenewalList: React.FC<RenewalListProps> = ({ leads, users, onUpdate
     } 
 
     const isAssignedToUser = !currentUser || currentUser.isAdmin || currentUser.isRenovations || lead.assignedTo === currentUser.name;
+    const isPrimme = lead.insuranceType === 'Renovação Primme'; // Filtra apenas Renovações Primme
 
-    return matchesSearch && matchesDate && isAssignedToUser;
+    return matchesSearch && matchesDate && isAssignedToUser && isPrimme;
   }).sort((a, b) => {
      // Sort by Expiry Date (endDate) Ascending (Soonest first) for renewals
      const dateA = a.dealInfo?.endDate || '9999-99-99';
