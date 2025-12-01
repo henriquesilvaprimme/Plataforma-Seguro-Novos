@@ -27,6 +27,7 @@ export interface Endorsement {
   installments: string;
   startDate: string;
   createdAt: string;
+  paymentMethod?: string;
 }
 
 export interface Lead {
@@ -45,6 +46,13 @@ export interface Lead {
   
   // Agendamento
   scheduledDate?: string;
+
+  // Fechamento e Controle
+  closedAt?: string;
+  cartaoPortoNovo?: boolean;
+  insurerConfirmed?: boolean;
+  usuarioId?: string;
+  registeredAt?: string;
 
   // Dados do Fechamento (Novo)
   dealInfo?: DealInfo;
