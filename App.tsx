@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { Dashboard } from './components/Dashboard';
@@ -76,7 +75,7 @@ export default function App() {
         addDataToCollection('renovados', newLead);
     } else if (newLead.id.includes('renewal_copy')) {
         addDataToCollection('renovacoes', newLead);
-    } else if (newLead.insuranceType === 'Renovação' && currentPath.includes('renovacoes')) {
+    } else if ((newLead.insuranceType === 'Renovação' || newLead.insuranceType === 'Renovação Primme') && currentPath.includes('renovacoes')) {
         addDataToCollection('renovacoes', newLead);
     } else {
         addDataToCollection('leads', newLead);
