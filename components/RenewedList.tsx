@@ -1,11 +1,12 @@
 
 import React, { useState, useEffect } from 'react';
-import { Lead, LeadStatus, USERS_LIST, DealInfo } from '../types';
+import { Lead, LeadStatus, User } from '../types';
 import { Car, Phone, Calendar, DollarSign, Percent, CreditCard, Users, CheckCircle, Bell, Search, Shield } from './Icons';
 
 interface RenewedListProps {
   leads: Lead[];
   onUpdateLead: (lead: Lead) => void;
+  currentUser: User | null;
 }
 
 const formatDisplayDate = (dateString?: string) => {
@@ -220,7 +221,7 @@ const RenewedCard: React.FC<{ lead: Lead, onUpdate: (l: Lead) => void }> = ({ le
     );
 };
 
-export const RenewedList: React.FC<RenewedListProps> = ({ leads, onUpdateLead }) => {
+export const RenewedList: React.FC<RenewedListProps> = ({ leads, onUpdateLead, currentUser }) => {
   const [searchTerm, setSearchTerm] = useState('');
   
   // Set default filter date to current Month/Year
@@ -255,7 +256,10 @@ export const RenewedList: React.FC<RenewedListProps> = ({ leads, onUpdateLead })
         matchesDate = lead.dealInfo.startDate.startsWith(filterDate);
     }
 
-    return matchesSearch && matchesDate;
+    // Somente Admin vê tudo. Outros (incluindo Renovações e Comum) veem apenas o que lhes foi atribuído
+    const isAssignedToUser = !currentUser || currentUser.isAdmin || lead.assignedTo === currentUser.name;
+
+    return matchesSearch && matchesDate && isAssignedToUser;
   });
 
   // Calculate Pagination
