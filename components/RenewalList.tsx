@@ -313,7 +313,7 @@ const RenewalCard: React.FC<{ lead: Lead, users: User[], onUpdate: (l: Lead) => 
                             <DollarSign className="w-3 h-3 text-gray-400 shrink-0" />
                             <span className="text-gray-700 font-medium">Prêmio: 
                                 <span className="text-gray-900 ml-1">
-                                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(lead.dealInfo?.netPremium || 0)}
+                                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format((lead.dealInfo?.netPremium || 0) * 1.0738)}
                                 </span>
                             </span>
                         </div>
