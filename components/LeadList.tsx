@@ -650,10 +650,37 @@ export const LeadList: React.FC<LeadListProps> = ({ leads, users, onSelectLead, 
       name: '', vehicleModel: '', vehicleYear: '', city: '', phone: '', insuranceType: 'Novo', assignedTo: ''
   });
   
+  // State to control Schedule Alert Popup
+  const [showScheduleAlert, setShowScheduleAlert] = useState(false);
+  
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
   useEffect(() => { setCurrentPage(1); }, [searchTerm, filterStatus, filterDate]);
+
+  // Effect to check for today's schedules on load/update
+  useEffect(() => {
+    if (leads.length > 0) {
+        const todayStr = new Date().toISOString().split('T')[0];
+        const storageKey = `scheduleAlertDismissed_${currentUser?.id || 'guest'}`;
+        const lastDismissed = localStorage.getItem(storageKey);
+
+        // Se já foi dispensado hoje, não faz nada
+        if (lastDismissed === todayStr) return;
+
+        // Se o alerta já está visível, não precisa checar
+        if (showScheduleAlert) return;
+
+        const hasTodaySchedules = leads.some(l => {
+            const isAssigned = !currentUser || currentUser.isAdmin || l.assignedTo === currentUser.name;
+            return isAssigned && l.status === LeadStatus.SCHEDULED && isToday(l.scheduledDate);
+        });
+
+        if (hasTodaySchedules) {
+            setShowScheduleAlert(true);
+        }
+    }
+  }, [leads, currentUser]);
 
   const filteredLeads = leads.filter(lead => {
     const term = searchTerm.toLowerCase();
@@ -673,7 +700,14 @@ export const LeadList: React.FC<LeadListProps> = ({ leads, users, onSelectLead, 
 
     return matchesSearch && matchesStatus && matchesDate && isAssignedToUser;
   }).sort((a, b) => {
-    // Sort by createdAt Descending (Newest first)
+    // Priority: Scheduled for TODAY comes first
+    const aIsToday = a.status === LeadStatus.SCHEDULED && isToday(a.scheduledDate);
+    const bIsToday = b.status === LeadStatus.SCHEDULED && isToday(b.scheduledDate);
+
+    if (aIsToday && !bIsToday) return -1;
+    if (!aIsToday && bIsToday) return 1;
+
+    // Fallback: Sort by createdAt Descending (Newest first)
     const dateA = new Date(a.createdAt).getTime();
     const dateB = new Date(b.createdAt).getTime();
     return dateB - dateA;
@@ -848,6 +882,30 @@ export const LeadList: React.FC<LeadListProps> = ({ leads, users, onSelectLead, 
                     <button onClick={handleCreateLead} disabled={!newLeadForm.name} className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 font-bold text-sm shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed">Criar Lead</button>
                 </div>
             </div>
+        </div>
+      )}
+
+      {/* SCHEDULE ALERT MODAL */}
+      {showScheduleAlert && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fade-in">
+             <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-sm flex flex-col items-center text-center animate-bounce-in">
+                 <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 mb-4 animate-pulse">
+                     <Bell className="w-8 h-8" />
+                 </div>
+                 <h3 className="text-xl font-extrabold text-gray-900 mb-2">Atenção!</h3>
+                 <p className="text-gray-600 mb-6 font-medium">Você tem leads <span className="text-blue-600 font-bold">agendados para hoje</span>. Verifique sua lista de prioridades.</p>
+                 <button 
+                    onClick={() => {
+                        const todayStr = new Date().toISOString().split('T')[0];
+                        const storageKey = `scheduleAlertDismissed_${currentUser?.id || 'guest'}`;
+                        localStorage.setItem(storageKey, todayStr);
+                        setShowScheduleAlert(false);
+                    }}
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-lg shadow-md transition-all transform active:scale-95"
+                 >
+                    Entendido
+                 </button>
+             </div>
         </div>
       )}
     </div>
