@@ -10,8 +10,9 @@ import { UserList } from './components/UserList';
 import { Ranking } from './components/Ranking';
 import { Reports } from './components/Reports';
 import { Login } from './components/Login';
+import { LostRenewalList } from './components/LostRenewalList'; // Imported
 import { Lead, LeadStatus, User } from './types';
-import { LayoutDashboard, Users, RefreshCw, CheckCircle, FileText, UserCog, Trophy, Power, FileBarChart2 } from './components/Icons';
+import { LayoutDashboard, Users, RefreshCw, CheckCircle, FileText, UserCog, Trophy, Power, FileBarChart2, FileX } from './components/Icons'; // Imported FileX
 import { 
   subscribeToCollection, 
   subscribeToRenovationsTotal, 
@@ -86,7 +87,8 @@ export default function App() {
   const handleUpdateLead = (updatedLead: Lead) => {
       if (currentPath.includes('leads')) {
           updateDataInCollection('leads', updatedLead.id, updatedLead);
-      } else if (currentPath.includes('renovacoes') || currentPath.includes('segurados')) {
+      } else if (currentPath.includes('renovacoes') || currentPath.includes('renovacoes-perdidas') || currentPath.includes('segurados')) {
+          // Atualiza na coleção de renovações, seja da aba normal ou da aba de perdidas
           updateDataInCollection('renovacoes', updatedLead.id, updatedLead);
       } else if (currentPath.includes('renovados')) {
           updateDataInCollection('renovados', updatedLead.id, updatedLead);
@@ -121,7 +123,7 @@ export default function App() {
         }
     }
     if (isRenovations) {
-        const allowed = ['/dashboard', '/renovacoes', '/renovados'];
+        const allowed = ['/dashboard', '/renovacoes', '/renovacoes-perdidas', '/renovados'];
         if (!allowed.some(path => currentPath.startsWith(path)) && currentPath !== '/') {
             navigate('/dashboard');
         }
@@ -177,13 +179,23 @@ export default function App() {
 
           {/* RENOVAÇÕES: Admin ou Renovações */}
           {(isAdmin || isRenovations) && (
-            <button 
-                onClick={() => navigate('/renovacoes')}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${currentPath.startsWith('/renovacoes') ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
-            >
-                <RefreshCw className="w-5 h-5" />
-                <span>Renovações</span>
-            </button>
+            <>
+                <button 
+                    onClick={() => navigate('/renovacoes')}
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${currentPath === '/renovacoes' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
+                >
+                    <RefreshCw className="w-5 h-5" />
+                    <span>Renovações</span>
+                </button>
+
+                <button 
+                    onClick={() => navigate('/renovacoes-perdidas')}
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${currentPath === '/renovacoes-perdidas' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
+                >
+                    <FileX className="w-5 h-5" />
+                    <span>Perdidas</span>
+                </button>
+            </>
           )}
 
           {/* RENOVADOS: Admin ou Renovações */}
@@ -311,6 +323,19 @@ export default function App() {
                                 users={usersCollection}
                                 onUpdateLead={handleUpdateLead} 
                                 onAddLead={handleAddLead} 
+                                currentUser={currentUser}
+                            />
+                        </div>
+                    ) : <Navigate to="/dashboard" />
+                } />
+
+                <Route path="/renovacoes-perdidas" element={
+                    (isAdmin || isRenovations) ? (
+                        <div className="h-full">
+                            <LostRenewalList 
+                                leads={renewalsCollection} 
+                                users={usersCollection}
+                                onUpdateLead={handleUpdateLead} 
                                 currentUser={currentUser}
                             />
                         </div>
