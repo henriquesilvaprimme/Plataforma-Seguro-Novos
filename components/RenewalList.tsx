@@ -207,7 +207,7 @@ const RenewalCard: React.FC<{ lead: Lead, users: User[], onUpdate: (l: Lead) => 
         switch(status) {
           case LeadStatus.NEW: return 'bg-blue-100 text-blue-800 border-blue-200';
           case LeadStatus.CLOSED: return 'bg-green-100 text-green-800 border-green-200';
-          case LeadStatus.SCHEDULED: return 'bg-blue-100 text-blue-800 border-blue-200'; // Alterado para azul
+          case LeadStatus.SCHEDULED: return 'bg-blue-100 text-blue-800 border-blue-200';
           case LeadStatus.LOST: return 'bg-red-100 text-red-800 border-red-200';
           case LeadStatus.IN_CONTACT: return 'bg-yellow-100 text-yellow-800 border-yellow-200';
           default: return 'bg-gray-100 text-gray-800 hidden'; 
@@ -668,6 +668,11 @@ export const RenewalList: React.FC<RenewalListProps> = ({ leads, users, onUpdate
     useEffect(() => { setCurrentPage(1); }, [searchTerm, filterDate, filterStatus]);
 
     const filteredLeads = leads.filter(lead => {
+        // EXCLUSÃO SOLICITADA: Renovação Primme + Perdido
+        if (lead.insuranceType === 'Renovação Primme' && lead.status === LeadStatus.LOST) {
+            return false;
+        }
+
         const term = searchTerm.toLowerCase();
         const name = lead.name || '';
         const phone = lead.phone || '';
