@@ -111,6 +111,7 @@ export const mapDocumentToLead = (doc: any): Lead => {
         closedAt: data.closedAt,
         usuarioId: data.usuarioId,
         registeredAt: data.registeredAt,
+        assignedAt: data.assignedAt,
         dealInfo: (data.Seguradora || data.PremioLiquido || data.VigenciaInicial) ? {
             insurer: data.Seguradora || '',
             netPremium: parseCurrency(data.PremioLiquido),
@@ -203,6 +204,10 @@ const mapAppToDb = (collectionName: string, data: any) => {
         dbLead.endorsements = data.endorsements;
     }
 
+    if (data.assignedAt) {
+        dbLead.assignedAt = data.assignedAt;
+    }
+
     return dbLead;
 };
 
@@ -292,3 +297,4 @@ export const updateTotalRenovacoes = async (newTotal: number) => {
         console.error("Erro ao atualizar total de renovações:", error);
     }
 };
+
