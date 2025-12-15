@@ -178,7 +178,12 @@ const LeadCard: React.FC<{ lead: Lead; users: User[]; onUpdate: (l: Lead) => voi
 
   const handleConfirmUser = () => {
       if (!selectedUser) return;
-      const updatedLead = { ...lead, assignedTo: selectedUser };
+      // Atualiza a data de criação para agora ao atribuir, para que suba para o topo da lista
+      const updatedLead = { 
+          ...lead, 
+          assignedTo: selectedUser,
+          createdAt: new Date().toISOString() 
+      };
       onUpdate(updatedLead);
       setIsEditingUser(false);
   };
@@ -345,17 +350,7 @@ const LeadCard: React.FC<{ lead: Lead; users: User[]; onUpdate: (l: Lead) => voi
                                 </select>
                                 <button 
                                     type="button"
-                                    onClick={() => { 
-                                        const me = "Henrique Silva"; 
-                                        setSelectedUser(me);
-                                        if(selectedUser === me) {
-                                            const updated = { ...lead, assignedTo: me };
-                                            onUpdate(updated);
-                                            setIsEditingUser(false);
-                                        } else {
-                                            handleConfirmUser();
-                                        }
-                                    }}
+                                    onClick={handleConfirmUser}
                                     className="bg-indigo-600 text-white border border-indigo-700 hover:bg-indigo-700 px-3 py-1 rounded text-xs font-bold transition-colors shadow-sm uppercase tracking-wide"
                                 >
                                     Atribuir
@@ -700,16 +695,10 @@ export const LeadList: React.FC<LeadListProps> = ({ leads, users, onSelectLead, 
 
     return matchesSearch && matchesStatus && matchesDate && isAssignedToUser;
   }).sort((a, b) => {
-    // Priority: Scheduled for TODAY comes first
-    const aIsToday = a.status === LeadStatus.SCHEDULED && isToday(a.scheduledDate);
-    const bIsToday = b.status === LeadStatus.SCHEDULED && isToday(b.scheduledDate);
-
-    if (aIsToday && !bIsToday) return -1;
-    if (!aIsToday && bIsToday) return 1;
-
-    // Fallback: Sort by createdAt Descending (Newest first)
-    const dateA = new Date(a.createdAt).getTime();
-    const dateB = new Date(b.createdAt).getTime();
+    // Ordenação estrita por data de criação (mais recente primeiro)
+    // Para que leads novos (recém-atribuídos) apareçam no topo
+    const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+    const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
     return dateB - dateA;
   });
 
@@ -911,3 +900,4 @@ export const LeadList: React.FC<LeadListProps> = ({ leads, users, onSelectLead, 
     </div>
   );
 };
+
