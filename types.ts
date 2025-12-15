@@ -53,6 +53,9 @@ export interface Lead {
   insurerConfirmed?: boolean;
   usuarioId?: string;
   registeredAt?: string;
+  
+  // Atribuição
+  assignedAt?: string; // Data de atribuição
 
   // Dados do Fechamento (Novo)
   dealInfo?: DealInfo;
@@ -90,3 +93,4 @@ export const USERS_LIST = [
   "Maria Atendimento",
   "Carlos Vendas"
 ];
+
