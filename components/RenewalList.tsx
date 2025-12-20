@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Lead, LeadStatus, User, DealInfo } from '../types';
 import { Car, Phone, Calendar, DollarSign, Percent, CreditCard, Users, RefreshCw, Bell, Search, Shield, AlertTriangle, Edit, Check, Plus } from './Icons';
 
@@ -664,6 +664,16 @@ export const RenewalList: React.FC<RenewalListProps> = ({ leads, users, onUpdate
 
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 10;
+    
+    // Ref para o container de rolagem
+    const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+    // Rola para o topo sempre que mudar a página
+    useEffect(() => {
+        if (scrollContainerRef.current) {
+          scrollContainerRef.current.scrollTo(0, 0);
+        }
+    }, [currentPage]);
 
     useEffect(() => { setCurrentPage(1); }, [searchTerm, filterDate, filterStatus]);
 
@@ -788,7 +798,7 @@ export const RenewalList: React.FC<RenewalListProps> = ({ leads, users, onUpdate
                 </div>
             </div>
 
-            <div className="flex flex-col gap-4 pb-4 overflow-y-auto w-full px-1 flex-1">
+            <div ref={scrollContainerRef} className="flex flex-col gap-4 pb-4 overflow-y-auto w-full px-1 flex-1">
                 {paginatedLeads.map((lead) => (
                     <RenewalCard 
                         key={lead.id} 
