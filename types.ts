@@ -60,6 +60,7 @@ export interface Lead {
   // Controle Financeiro
   commissionPaid?: boolean;
   commissionCP?: boolean;
+  commissionInstallmentPlan?: boolean; // Novo: Define se segue a regra de parcelamento
 
   // Dados do Fechamento (Novo)
   dealInfo?: DealInfo;
