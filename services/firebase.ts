@@ -112,6 +112,7 @@ export const mapDocumentToLead = (doc: any): Lead => {
         assignedAt: data.assignedAt,
         commissionPaid: data.commissionPaid || false,
         commissionCP: data.commissionCP || false,
+        commissionInstallmentPlan: data.commissionInstallmentPlan || false,
         dealInfo: (data.Seguradora || data.PremioLiquido || data.VigenciaInicial) ? {
             insurer: data.Seguradora || '',
             netPremium: parseCurrency(data.PremioLiquido),
@@ -182,7 +183,8 @@ const mapAppToDb = (collectionName: string, data: any) => {
         insurerConfirmed: data.insurerConfirmed || false,
         CartaoPortoNovo: data.cartaoPortoNovo || false,
         commissionPaid: data.commissionPaid || false,
-        commissionCP: data.commissionCP || false
+        commissionCP: data.commissionCP || false,
+        commissionInstallmentPlan: data.commissionInstallmentPlan || false
     };
 
     if (data.dealInfo) {
