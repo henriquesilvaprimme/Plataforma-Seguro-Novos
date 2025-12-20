@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Lead, LeadStatus, User, DealInfo } from '../types';
 import { Search, Plus, Car, Calendar, MapPin, Shield, Phone, BrainCircuit, Users, Bell, ChevronRight, Edit, Check } from './Icons';
 
@@ -653,6 +653,16 @@ export const LeadList: React.FC<LeadListProps> = ({ leads, users, onSelectLead, 
   
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
+  
+  // Ref para o container de rolagem
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  // Rola para o topo sempre que mudar a página
+  useEffect(() => {
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTo(0, 0);
+    }
+  }, [currentPage]);
 
   useEffect(() => { setCurrentPage(1); }, [searchTerm, filterStatus, filterDate]);
 
@@ -786,7 +796,7 @@ export const LeadList: React.FC<LeadListProps> = ({ leads, users, onSelectLead, 
         </div>
       </div>
 
-      <div className="flex flex-col gap-4 pb-4 overflow-y-auto w-full px-1 flex-1">
+      <div ref={scrollContainerRef} className="flex flex-col gap-4 pb-4 overflow-y-auto w-full px-1 flex-1">
         {paginatedLeads.map((lead) => (
             <LeadCard 
                 key={lead.id} 
@@ -912,4 +922,3 @@ export const LeadList: React.FC<LeadListProps> = ({ leads, users, onSelectLead, 
     </div>
   );
 };
-
