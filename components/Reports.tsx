@@ -31,41 +31,43 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
     return dateString;
   };
 
-  const parseDateForSort = (dateStr?: string) => {
-    if (!dateStr) return 0;
-    if (dateStr.includes('/')) {
-      const [d, m, y] = dateStr.split('/');
-      return new Date(`${y}-${m}-${d}`).getTime();
-    }
-    return new Date(dateStr).getTime();
-  };
-
   const getInstallments = (str?: string) => {
     if (!str) return 1;
     const match = str.match(/(\d+)/);
     return match ? parseInt(match[0]) : 1;
   };
 
-  const calculateFinalCommission = (netPremium: number, commissionPct: number, paymentMethod: string, installmentsStr: string) => {
+  const calculateCommissionRules = (netPremium: number, commissionPct: number, paymentMethod: string, installmentsStr: string) => {
       const premium = netPremium || 0;
       const commPct = commissionPct || 0;
       const baseValue = premium * (commPct / 100);
       const inst = getInstallments(installmentsStr);
       let finalValue = baseValue;
+      let installmentsCount = 1;
       const method = (paymentMethod || '').toUpperCase();
 
       if (method.includes('CARTÃO PORTO') || method.includes('CP')) {
-          finalValue = baseValue; 
+          finalValue = baseValue;
+          installmentsCount = 1;
       } else if (method.includes('CRÉDITO') || method.includes('CREDITO') || method === 'CC') {
-          if (inst >= 6) finalValue = baseValue / inst;
+          if (inst >= 6) {
+              finalValue = baseValue / inst;
+              installmentsCount = inst;
+          }
       } else if (method.includes('DÉBITO') || method.includes('DEBITO')) {
-          // Regra Débito: de 5 até 12x divide pelo número da parcela. De 1 até 4x é à vista.
-          if (inst >= 5) finalValue = baseValue / inst;
+          if (inst >= 5) {
+              finalValue = baseValue / inst;
+              installmentsCount = inst;
+          }
       } else if (method.includes('BOLETO')) {
-          if (inst >= 4) finalValue = baseValue / inst;
+          if (inst >= 4) {
+              finalValue = baseValue / inst;
+              installmentsCount = inst;
+          }
       }
-      finalValue = finalValue * 0.85;
-      return { baseValue, finalValue };
+      
+      const finalWithTax = finalValue * 0.85;
+      return { baseValue, finalValue: finalWithTax, installmentsCount };
   };
 
   const allMonthlyItems = useMemo(() => {
@@ -78,16 +80,33 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
         return true;
     });
 
+    const [filterYear, filterMonth] = filterDate.split('-').map(Number);
+
     uniqueLeads.forEach(lead => {
         if (lead.status === LeadStatus.CLOSED && lead.dealInfo) {
-            const dateToCheck = lead.dealInfo.startDate || lead.closedAt || '';
-            let normalizedDate = dateToCheck;
-            if (dateToCheck.includes('/')) {
-                 const [d, m, y] = dateToCheck.split('/');
-                 normalizedDate = `${y}-${m}-${d}`;
+            const startDateStr = lead.dealInfo.startDate;
+            if (!startDateStr) return;
+
+            let normalizedStart = startDateStr;
+            if (startDateStr.includes('/')) {
+                 const [d, m, y] = startDateStr.split('/');
+                 normalizedStart = `${y}-${m}-${d}`;
             }
-            if (normalizedDate.startsWith(filterDate)) {
+            
+            const [startYear, startMonth] = normalizedStart.split('-').map(Number);
+            const { finalValue, installmentsCount } = calculateCommissionRules(
+                lead.dealInfo.netPremium, lead.dealInfo.commission, 
+                lead.dealInfo.paymentMethod, lead.dealInfo.installments
+            );
+
+            // Calcular a diferença de meses entre o início e o filtro
+            const monthDiff = (filterYear - startYear) * 12 + (filterMonth - startMonth);
+
+            // Verificar se o mês filtrado está dentro da janela de produção (do mês 0 até total de parcelas - 1)
+            if (monthDiff >= 0 && monthDiff < installmentsCount) {
+                 const isFirstMonth = monthDiff === 0;
                  items.push({
+                     id: lead.id,
                      type: 'SALE',
                      subtype: lead.insuranceType || 'Novo',
                      leadName: lead.name,
@@ -98,13 +117,20 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
                      paymentMethod: lead.dealInfo.paymentMethod,
                      startDate: lead.dealInfo.startDate,
                      collaborator: lead.assignedTo || 'Não informado',
-                     id: lead.id
+                     isFirstMonth, // Apenas o mês de início conta como item produzido e prêmio líquido
+                     currentInstallment: monthDiff + 1,
+                     totalInstallments: installmentsCount,
+                     monthlyCommission: finalValue
                  });
             }
         }
     });
-    // Ordenação por vigência da menor para a maior
-    return items.sort((a, b) => parseDateForSort(a.startDate) - parseDateForSort(b.startDate));
+    
+    return items.sort((a, b) => {
+        const dateA = a.startDate.includes('/') ? a.startDate.split('/').reverse().join('') : a.startDate;
+        const dateB = b.startDate.includes('/') ? b.startDate.split('/').reverse().join('') : b.startDate;
+        return dateA.localeCompare(dateB);
+    });
   }, [leads, renewed, renewals, filterDate]);
 
   const metricsGeneral = useMemo(() => {
@@ -113,22 +139,32 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
         new: { premium: 0, commission: 0, count: 0, commPctSum: 0 },
         renewal: { premium: 0, commission: 0, count: 0, commPctSum: 0 }
     };
+
     allMonthlyItems.forEach(item => {
-        const { finalValue } = calculateFinalCommission(item.netPremium, item.commissionPct, item.paymentMethod, item.installments);
-        data.general.premium += item.netPremium || 0;
-        data.general.commission += finalValue;
-        data.general.count++;
-        data.general.commPctSum += item.commissionPct || 0;
+        // Comissão sempre soma
+        data.general.commission += item.monthlyCommission;
+
+        // Prêmio e Contagem apenas se for o mês original da venda
+        if (item.isFirstMonth) {
+            data.general.premium += item.netPremium || 0;
+            data.general.count++;
+            data.general.commPctSum += item.commissionPct || 0;
+        }
+
         if (item.subtype === 'Renovação Primme') {
-            data.renewal.premium += item.netPremium || 0;
-            data.renewal.commission += finalValue;
-            data.renewal.count++;
-            data.renewal.commPctSum += item.commissionPct || 0;
+            data.renewal.commission += item.monthlyCommission;
+            if (item.isFirstMonth) {
+                data.renewal.premium += item.netPremium || 0;
+                data.renewal.count++;
+                data.renewal.commPctSum += item.commissionPct || 0;
+            }
         } else {
-            data.new.premium += item.netPremium || 0;
-            data.new.commission += finalValue;
-            data.new.count++;
-            data.new.commPctSum += item.commissionPct || 0;
+            data.new.commission += item.monthlyCommission;
+            if (item.isFirstMonth) {
+                data.new.premium += item.netPremium || 0;
+                data.new.count++;
+                data.new.commPctSum += item.commissionPct || 0;
+            }
         }
     });
     return data;
@@ -146,14 +182,6 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
  xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
  xmlns:html="http://www.w3.org/TR/REC-html40">
  <Styles>
-  <Style ss:ID="Default" ss:Name="Normal">
-   <Alignment ss:Vertical="Bottom"/>
-   <Borders/>
-   <Font ss:FontName="Calibri" x:Family="Swiss" ss:Size="11" ss:Color="#000000"/>
-   <Interior/>
-   <NumberFormat/>
-   <Protection/>
-  </Style>
   <Style ss:ID="headerMain">
    <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>
    <Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1"/></Borders>
@@ -182,25 +210,26 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
 
     const createWorksheetXML = (name: string, items: any[], metrics: any, showDetailed: boolean = false) => {
       let sheet = `<Worksheet ss:Name="${name.substring(0, 31).replace(/[\[\]\*\?\/\\]/g, '')}">
-      <Table ss:ExpandedColumnCount="12">
+      <Table ss:ExpandedColumnCount="13">
        <Column ss:Width="40"/>
        <Column ss:Width="100"/>
        <Column ss:Width="100"/>
-       <Column ss:Width="250"/>
+       <Column ss:Width="200"/>
        <Column ss:Width="150"/>
-       <Column ss:Width="100"/>
+       <Column ss:Width="90"/>
+       <Column ss:Width="60"/>
+       <Column ss:Width="110"/>
+       <Column ss:Width="90"/>
+       <Column ss:Width="40"/>
+       <Column ss:Width="120"/>
        <Column ss:Width="60"/>
        <Column ss:Width="120"/>
-       <Column ss:Width="100"/>
-       <Column ss:Width="50"/>
-       <Column ss:Width="150"/>
-       <Column ss:Width="150"/>
        
        <Row ss:Height="25">
-        <Cell ss:MergeAcross="11" ss:StyleID="headerMain"><Data ss:Type="String">RELATÓRIO DE PRODUÇÃO - ${filterDate} ${name !== 'GERAL' ? `(${name})` : ''}</Data></Cell>
+        <Cell ss:MergeAcross="12" ss:StyleID="headerMain"><Data ss:Type="String">RELATÓRIO DE PRODUÇÃO - ${filterDate} ${name !== 'GERAL' ? `(${name})` : ''}</Data></Cell>
        </Row>
        <Row ss:Index="3">
-        <Cell ss:MergeAcross="11" ss:StyleID="headerSection"><Data ss:Type="String">RESUMO GERAL</Data></Cell>
+        <Cell ss:MergeAcross="12" ss:StyleID="headerSection"><Data ss:Type="String">RESUMO GERAL</Data></Cell>
        </Row>
        <Row>
         <Cell ss:MergeAcross="1" ss:StyleID="cellBold"><Data ss:Type="String">PRÊMIO LÍQ. TOTAL</Data></Cell>
@@ -214,7 +243,7 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
       if (showDetailed) {
         sheet += `
        <Row ss:Index="6">
-        <Cell ss:MergeAcross="11" ss:StyleID="headerSection"><Data ss:Type="String">SEGURO NOVO</Data></Cell>
+        <Cell ss:MergeAcross="12" ss:StyleID="headerSection"><Data ss:Type="String">SEGURO NOVO</Data></Cell>
        </Row>
        <Row>
         <Cell ss:MergeAcross="1" ss:StyleID="cellBold"><Data ss:Type="String">PRÊMIO LÍQUIDO</Data></Cell>
@@ -227,7 +256,7 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
         <Cell ss:StyleID="cellNormal"><Data ss:Type="String">${getAvg(metrics.new.commPctSum, metrics.new.count).toFixed(2)}%</Data></Cell>
        </Row>
        <Row ss:Index="9">
-        <Cell ss:MergeAcross="11" ss:StyleID="headerSection"><Data ss:Type="String">RENOVAÇÕES PRIMME</Data></Cell>
+        <Cell ss:MergeAcross="12" ss:StyleID="headerSection"><Data ss:Type="String">RENOVAÇÕES PRIMME</Data></Cell>
        </Row>
        <Row>
         <Cell ss:MergeAcross="1" ss:StyleID="cellBold"><Data ss:Type="String">PRÊMIO LÍQUIDO</Data></Cell>
@@ -241,7 +270,6 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
        </Row>`;
       }
 
-      // Se não for detalhado, a listagem de itens começa no Index 6, caso contrário no Index 12
       sheet += `
        <Row ss:Index="${showDetailed ? '12' : '6'}" ss:Height="20">
         <Cell ss:StyleID="headerMain"><Data ss:Type="String">ID</Data></Cell>
@@ -254,24 +282,26 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
         <Cell ss:StyleID="headerMain"><Data ss:Type="String">Comissão Base</Data></Cell>
         <Cell ss:StyleID="headerMain"><Data ss:Type="String">Forma Pagto</Data></Cell>
         <Cell ss:StyleID="headerMain"><Data ss:Type="String">Parc</Data></Cell>
-        <Cell ss:StyleID="headerMain"><Data ss:Type="String">Comissão Final (85%)</Data></Cell>
+        <Cell ss:StyleID="headerMain"><Data ss:Type="String">Comissão Parcela</Data></Cell>
+        <Cell ss:StyleID="headerMain"><Data ss:Type="String">Parcela</Data></Cell>
         <Cell ss:StyleID="headerMain"><Data ss:Type="String">Colaborador</Data></Cell>
        </Row>`;
 
       items.forEach(item => {
-        const { baseValue, finalValue } = calculateFinalCommission(item.netPremium, item.commissionPct, item.paymentMethod, item.installments);
+        const { baseValue } = calculateCommissionRules(item.netPremium, item.commissionPct, item.paymentMethod, item.installments);
         sheet += `<Row>
         <Cell ss:StyleID="cellNormal"><Data ss:Type="String">${item.id}</Data></Cell>
         <Cell ss:StyleID="cellNormal"><Data ss:Type="String">${formatDisplayDate(item.startDate)}</Data></Cell>
         <Cell ss:StyleID="cellNormal"><Data ss:Type="String">${item.subtype}</Data></Cell>
         <Cell ss:StyleID="cellNormal"><Data ss:Type="String">${item.leadName.toUpperCase()}</Data></Cell>
         <Cell ss:StyleID="cellNormal"><Data ss:Type="String">${item.insurer}</Data></Cell>
-        <Cell ss:StyleID="cellNormal"><Data ss:Type="String">${formatMoney(item.netPremium)}</Data></Cell>
+        <Cell ss:StyleID="cellNormal"><Data ss:Type="String">${item.isFirstMonth ? formatMoney(item.netPremium) : 'R$ 0,00'}</Data></Cell>
         <Cell ss:StyleID="cellNormal"><Data ss:Type="String">${item.commissionPct.toFixed(2)}%</Data></Cell>
         <Cell ss:StyleID="cellNormal"><Data ss:Type="String">${formatMoney(baseValue)}</Data></Cell>
         <Cell ss:StyleID="cellNormal"><Data ss:Type="String">${item.paymentMethod}</Data></Cell>
         <Cell ss:StyleID="cellNormal"><Data ss:Type="String">${item.installments}</Data></Cell>
-        <Cell ss:StyleID="cellGreen"><Data ss:Type="String">${formatMoney(finalValue)}</Data></Cell>
+        <Cell ss:StyleID="cellGreen"><Data ss:Type="String">${formatMoney(item.monthlyCommission)}</Data></Cell>
+        <Cell ss:StyleID="cellNormal"><Data ss:Type="String">${item.currentInstallment}/${item.totalInstallments}</Data></Cell>
         <Cell ss:StyleID="cellNormal"><Data ss:Type="String">${item.collaborator}</Data></Cell>
        </Row>`;
       });
@@ -289,30 +319,32 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
           renewal: { premium: 0, commission: 0, count: 0, commPctSum: 0 }
       };
       subset.forEach(item => {
-          const { finalValue } = calculateFinalCommission(item.netPremium, item.commissionPct, item.paymentMethod, item.installments);
-          data.general.premium += item.netPremium || 0;
-          data.general.commission += finalValue;
-          data.general.count++;
-          data.general.commPctSum += item.commissionPct || 0;
+          data.general.commission += item.monthlyCommission;
+          if (item.isFirstMonth) {
+              data.general.premium += item.netPremium || 0;
+              data.general.count++;
+              data.general.commPctSum += item.commissionPct || 0;
+          }
           if (item.subtype === 'Renovação Primme') {
-              data.renewal.premium += item.netPremium || 0;
-              data.renewal.commission += finalValue;
-              data.renewal.count++;
-              data.renewal.commPctSum += item.commissionPct || 0;
+              data.renewal.commission += item.monthlyCommission;
+              if (item.isFirstMonth) {
+                  data.renewal.premium += item.netPremium || 0;
+                  data.renewal.count++;
+                  data.renewal.commPctSum += item.commissionPct || 0;
+              }
           } else {
-              data.new.premium += item.netPremium || 0;
-              data.new.commission += finalValue;
-              data.new.count++;
-              data.new.commPctSum += item.commissionPct || 0;
+              data.new.commission += item.monthlyCommission;
+              if (item.isFirstMonth) {
+                  data.new.premium += item.netPremium || 0;
+                  data.new.count++;
+                  data.new.commPctSum += item.commissionPct || 0;
+              }
           }
       });
       return data;
     };
 
-    // Aba Geral mostra tudo (showDetailed = true)
     let worksheets = createWorksheetXML('GERAL', allMonthlyItems, metricsGeneral, true);
-    
-    // Abas de usuários mostram apenas o Resumo Geral (showDetailed = false)
     collaborators.forEach(collab => {
       const subset = allMonthlyItems.filter(i => i.collaborator === collab);
       worksheets += createWorksheetXML(collab, subset, calculateMetricsSubset(subset), false);
@@ -360,7 +392,7 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
         return false;
       })
       .map(lead => {
-          const { finalValue } = calculateFinalCommission(lead.dealInfo!.netPremium, lead.dealInfo!.commission, lead.dealInfo!.paymentMethod, lead.dealInfo!.installments);
+          const { finalValue } = calculateCommissionRules(lead.dealInfo!.netPremium, lead.dealInfo!.commission, lead.dealInfo!.paymentMethod, lead.dealInfo!.installments);
           return {
             ...lead,
             commissionValue: finalValue,
