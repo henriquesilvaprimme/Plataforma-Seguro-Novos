@@ -31,43 +31,48 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
     return dateString;
   };
 
-  const getInstallments = (str?: string) => {
+  const getInstallmentsNum = (str?: string) => {
     if (!str) return 1;
     const match = str.match(/(\d+)/);
     return match ? parseInt(match[0]) : 1;
   };
 
-  const calculateCommissionRules = (netPremium: number, commissionPct: number, paymentMethod: string, installmentsStr: string) => {
+  const calculateCommissionRules = (netPremium: number, commissionPct: number, paymentMethod: string, installmentsStr: string, isPaid?: boolean) => {
       const premium = netPremium || 0;
       const commPct = commissionPct || 0;
       const baseValue = premium * (commPct / 100);
-      const inst = getInstallments(installmentsStr);
-      let finalValue = baseValue;
-      let installmentsCount = 1;
+      const inst = getInstallmentsNum(installmentsStr);
       const method = (paymentMethod || '').toUpperCase();
+      
+      let installmentsCount = 1;
 
-      if (method.includes('CARTÃO PORTO') || method.includes('CP')) {
-          finalValue = baseValue;
-          installmentsCount = 1;
-      } else if (method.includes('CRÉDITO') || method.includes('CREDITO') || method === 'CC') {
-          if (inst >= 6) {
-              finalValue = baseValue / inst;
-              installmentsCount = inst;
-          }
-      } else if (method.includes('DÉBITO') || method.includes('DEBITO')) {
-          if (inst >= 5) {
-              finalValue = baseValue / inst;
-              installmentsCount = inst;
-          }
-      } else if (method.includes('BOLETO')) {
-          if (inst >= 4) {
-              finalValue = baseValue / inst;
-              installmentsCount = inst;
+      // Se NÃO estiver marcada como PAGA, aplica as regras automáticas de parcelamento
+      if (!isPaid) {
+          if (method.includes('CARTÃO PORTO') || method.includes('CP')) {
+              // Parcelamento em Cartão Porto Seguro: 1x a 12x é sempre à vista (1 parcela)
+              installmentsCount = 1;
+          } else if (method.includes('CRÉDITO') || method.includes('CREDITO') || method === 'CC') {
+              // Cartão de Crédito: 1x a 6x à vista, 7x a 12x dividido
+              installmentsCount = inst >= 7 ? inst : 1;
+          } else if (method.includes('DÉBITO') || method.includes('DEBITO')) {
+              // Débito: 1x a 4x à vista, 5x a 12x dividido
+              installmentsCount = inst >= 5 ? inst : 1;
+          } else if (method.includes('BOLETO')) {
+              // Boleto: 1x a 3x à vista, 4x a 12x dividido
+              installmentsCount = inst >= 4 ? inst : 1;
           }
       }
+
+      // Se isPaid for true, installmentsCount permanece 1 (valor integral no mês)
+
+      const monthlyComm = baseValue / installmentsCount;
+      const finalValueWithTax = monthlyComm * 0.85;
       
-      const finalWithTax = finalValue * 0.85;
-      return { baseValue, finalValue: finalWithTax, installmentsCount };
+      return { 
+        baseValue: baseValue,
+        finalValue: finalValueWithTax, 
+        installmentsCount: installmentsCount 
+      };
   };
 
   const allMonthlyItems = useMemo(() => {
@@ -94,17 +99,21 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
             }
             
             const [startYear, startMonth] = normalizedStart.split('-').map(Number);
+            
             const { finalValue, installmentsCount } = calculateCommissionRules(
-                lead.dealInfo.netPremium, lead.dealInfo.commission, 
-                lead.dealInfo.paymentMethod, lead.dealInfo.installments
+                lead.dealInfo.netPremium, 
+                lead.dealInfo.commission, 
+                lead.dealInfo.paymentMethod, 
+                lead.dealInfo.installments,
+                lead.commissionPaid
             );
 
-            // Calcular a diferença de meses entre o início e o filtro
             const monthDiff = (filterYear - startYear) * 12 + (filterMonth - startMonth);
 
-            // Verificar se o mês filtrado está dentro da janela de produção (do mês 0 até total de parcelas - 1)
+            // Verifica se o mês visualizado está dentro da janela de parcelas
             if (monthDiff >= 0 && monthDiff < installmentsCount) {
                  const isFirstMonth = monthDiff === 0;
+                 
                  items.push({
                      id: lead.id,
                      type: 'SALE',
@@ -117,7 +126,7 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
                      paymentMethod: lead.dealInfo.paymentMethod,
                      startDate: lead.dealInfo.startDate,
                      collaborator: lead.assignedTo || 'Não informado',
-                     isFirstMonth, // Apenas o mês de início conta como item produzido e prêmio líquido
+                     isFirstMonth,
                      currentInstallment: monthDiff + 1,
                      totalInstallments: installmentsCount,
                      monthlyCommission: finalValue
@@ -141,10 +150,10 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
     };
 
     allMonthlyItems.forEach(item => {
-        // Comissão sempre soma
+        // Comissão acumulada para este mês (pode ser parcela ou integral)
         data.general.commission += item.monthlyCommission;
 
-        // Prêmio e Contagem apenas se for o mês original da venda
+        // Prêmio e Contagem somente se for o primeiro mês da vigência para não duplicar contagem de itens
         if (item.isFirstMonth) {
             data.general.premium += item.netPremium || 0;
             data.general.count++;
@@ -282,13 +291,12 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
         <Cell ss:StyleID="headerMain"><Data ss:Type="String">Comissão Base</Data></Cell>
         <Cell ss:StyleID="headerMain"><Data ss:Type="String">Forma Pagto</Data></Cell>
         <Cell ss:StyleID="headerMain"><Data ss:Type="String">Parc</Data></Cell>
-        <Cell ss:StyleID="headerMain"><Data ss:Type="String">Comissão Parcela</Data></Cell>
+        <Cell ss:StyleID="headerMain"><Data ss:Type="String">Comissão Relatório</Data></Cell>
         <Cell ss:StyleID="headerMain"><Data ss:Type="String">Parcela</Data></Cell>
         <Cell ss:StyleID="headerMain"><Data ss:Type="String">Colaborador</Data></Cell>
        </Row>`;
 
       items.forEach(item => {
-        const { baseValue } = calculateCommissionRules(item.netPremium, item.commissionPct, item.paymentMethod, item.installments);
         sheet += `<Row>
         <Cell ss:StyleID="cellNormal"><Data ss:Type="String">${item.id}</Data></Cell>
         <Cell ss:StyleID="cellNormal"><Data ss:Type="String">${formatDisplayDate(item.startDate)}</Data></Cell>
@@ -297,7 +305,7 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
         <Cell ss:StyleID="cellNormal"><Data ss:Type="String">${item.insurer}</Data></Cell>
         <Cell ss:StyleID="cellNormal"><Data ss:Type="String">${item.isFirstMonth ? formatMoney(item.netPremium) : 'R$ 0,00'}</Data></Cell>
         <Cell ss:StyleID="cellNormal"><Data ss:Type="String">${item.commissionPct.toFixed(2)}%</Data></Cell>
-        <Cell ss:StyleID="cellNormal"><Data ss:Type="String">${formatMoney(baseValue)}</Data></Cell>
+        <Cell ss:StyleID="cellNormal"><Data ss:Type="String">${formatMoney(item.netPremium * (item.commissionPct / 100))}</Data></Cell>
         <Cell ss:StyleID="cellNormal"><Data ss:Type="String">${item.paymentMethod}</Data></Cell>
         <Cell ss:StyleID="cellNormal"><Data ss:Type="String">${item.installments}</Data></Cell>
         <Cell ss:StyleID="cellGreen"><Data ss:Type="String">${formatMoney(item.monthlyCommission)}</Data></Cell>
@@ -362,9 +370,18 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
     URL.revokeObjectURL(url);
   };
 
-  const toggleCheck = (lead: Lead, field: 'commissionPaid' | 'commissionCP') => {
+  const toggleCheck = (lead: Lead, field: keyof Lead) => {
       if (!onUpdateLead) return;
-      onUpdateLead({ ...lead, [field]: !lead[field] });
+      
+      const update: Partial<Lead> = { [field]: !lead[field] };
+      
+      if (field === 'commissionPaid' && update[field]) {
+          update.commissionInstallmentPlan = false;
+      } else if (field === 'commissionInstallmentPlan' && update[field]) {
+          update.commissionPaid = false;
+      }
+
+      onUpdateLead({ ...lead, ...update });
   };
 
   const paidItems = useMemo(() => {
@@ -392,7 +409,13 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
         return false;
       })
       .map(lead => {
-          const { finalValue } = calculateCommissionRules(lead.dealInfo!.netPremium, lead.dealInfo!.commission, lead.dealInfo!.paymentMethod, lead.dealInfo!.installments);
+          const { finalValue } = calculateCommissionRules(
+            lead.dealInfo!.netPremium, 
+            lead.dealInfo!.commission, 
+            lead.dealInfo!.paymentMethod, 
+            lead.dealInfo!.installments,
+            lead.commissionPaid
+          );
           return {
             ...lead,
             commissionValue: finalValue,
@@ -566,6 +589,11 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
                                                <button onClick={() => toggleCheck(lead, 'commissionPaid')} className={`flex items-center gap-1 px-2 py-1 rounded border text-[10px] font-bold transition-all ${lead.commissionPaid ? 'bg-green-600 text-white border-green-700' : 'bg-gray-100 text-gray-400 border-gray-200 hover:border-green-500 hover:text-green-600'}`}>
                                                     <CheckCircle className="w-3 h-3" /> PAGA
                                                </button>
+                                               
+                                               <button onClick={() => toggleCheck(lead, 'commissionInstallmentPlan')} className={`flex items-center gap-1 px-2 py-1 rounded border text-[10px] font-bold transition-all ${lead.commissionInstallmentPlan ? 'bg-indigo-600 text-white border-indigo-700' : 'bg-gray-100 text-gray-400 border-gray-200 hover:border-indigo-500 hover:text-indigo-600'}`}>
+                                                    <Calendar className="w-3 h-3" /> PARCELADO
+                                               </button>
+
                                                {lead.cartaoPortoNovo && (
                                                    <button onClick={() => toggleCheck(lead, 'commissionCP')} className={`flex items-center gap-1 px-2 py-1 rounded border text-[10px] font-bold transition-all ${lead.commissionCP ? 'bg-blue-600 text-white border-blue-700' : 'bg-gray-100 text-gray-400 border-gray-200 hover:border-blue-500 hover:text-blue-600'}`}>
                                                         <DollarSign className="w-3 h-3" /> CP
