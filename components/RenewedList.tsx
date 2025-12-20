@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Lead, LeadStatus, User } from '../types';
 import { Car, Phone, Calendar, DollarSign, Percent, CreditCard, Users, CheckCircle, Bell, Search, Shield } from './Icons';
 
@@ -237,6 +237,16 @@ export const RenewedList: React.FC<RenewedListProps> = ({ leads, onUpdateLead, c
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
+  
+  // Ref para o container de rolagem
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  // Rola para o topo sempre que mudar a página
+  useEffect(() => {
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTo(0, 0);
+    }
+  }, [currentPage]);
 
   // Reset pagination when filters change
   useEffect(() => {
@@ -301,7 +311,7 @@ export const RenewedList: React.FC<RenewedListProps> = ({ leads, onUpdateLead, c
           
           <input 
             type="month"
-            className="border border-gray-300 rounded text-sm px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white text-gray-700"
+            className="border border-gray-300 rounded text-sm px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white text-gray-700"
             value={filterDate}
             onChange={(e) => setFilterDate(e.target.value)}
           />
@@ -309,7 +319,7 @@ export const RenewedList: React.FC<RenewedListProps> = ({ leads, onUpdateLead, c
       </div>
 
       {/* List Layout - Stacked Cards */}
-      <div className="flex flex-col gap-4 pb-4 overflow-y-auto w-full px-1 flex-1">
+      <div ref={scrollContainerRef} className="flex flex-col gap-4 pb-4 overflow-y-auto w-full px-1 flex-1">
         {paginatedLeads.map((lead) => (
             <RenewedCard 
                 key={lead.id} 
