@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Lead, LeadStatus, User, DealInfo } from '../types';
 import { Car, Phone, Calendar, DollarSign, Percent, CreditCard, Users, FileX, Search, Shield, Bell, AlertTriangle } from './Icons';
 
@@ -185,15 +185,21 @@ export const LostRenewalList: React.FC<LostRenewalListProps> = ({ leads, users, 
 
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 10;
+    
+    // Ref para o container de rolagem
+    const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+    // Rola para o topo sempre que mudar a página
+    useEffect(() => {
+        if (scrollContainerRef.current) {
+          scrollContainerRef.current.scrollTo(0, 0);
+        }
+    }, [currentPage]);
 
     useEffect(() => { setCurrentPage(1); }, [searchTerm, filterDate, filterStatus]);
 
     const filteredLeads = leads.filter(lead => {
         // CRITÉRIOS OBRIGATÓRIOS: Renovação Primme + Perdido
-        // Nota: O filtro visual 'filterStatus' deve ser 'Perdido' para mostrar algo, 
-        // mas se o usuário mudar o filtro, a lista ficará vazia pois a coleção é filtrada para mostrar "Renovações Perdidas".
-        // Para consistência com a "sessão", forçamos a exibição apenas dos Perdidos.
-        
         const isRenovacaoPrimme = lead.insuranceType === 'Renovação Primme';
         const isLost = lead.status === LeadStatus.LOST;
 
@@ -206,8 +212,6 @@ export const LostRenewalList: React.FC<LostRenewalListProps> = ({ leads, users, 
         const phone = lead.phone || '';
         const matchesSearch = name.toLowerCase().includes(term) || phone.includes(term);
 
-        // O filtro de visualização 'filterStatus' aqui serve apenas para confirmar que o usuário quer ver os perdidos.
-        // Se ele selecionar outro status no dropdown, a lista aparecerá vazia, o que é o comportamento esperado de um filtro.
         const matchesStatus = filterStatus === 'all' || lead.status === filterStatus;
 
         let matchesDate = true;
@@ -275,7 +279,7 @@ export const LostRenewalList: React.FC<LostRenewalListProps> = ({ leads, users, 
                 </div>
             </div>
 
-            <div className="flex flex-col gap-4 pb-4 overflow-y-auto w-full px-1 flex-1">
+            <div ref={scrollContainerRef} className="flex flex-col gap-4 pb-4 overflow-y-auto w-full px-1 flex-1">
                 {paginatedLeads.map((lead) => (
                     <LostRenewalCard 
                         key={lead.id} 
