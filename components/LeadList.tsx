@@ -708,10 +708,14 @@ export const LeadList: React.FC<LeadListProps> = ({ leads, users, onSelectLead, 
 
     return matchesSearch && matchesStatus && matchesDate && isAssignedToUser;
   }).sort((a, b) => {
-    // Sorting logic adjusted:
-    // If ADMIN: Strict creation date sort (original order)
-    // If COMMON: Sort by assigned date (if present) OR creation date (moves recent assignments to top)
-    
+    // NOVA LOGICA: Prioriza agendamentos de HOJE no topo da lista
+    const aScheduledToday = a.status === LeadStatus.SCHEDULED && isToday(a.scheduledDate);
+    const bScheduledToday = b.status === LeadStatus.SCHEDULED && isToday(b.scheduledDate);
+
+    if (aScheduledToday && !bScheduledToday) return -1;
+    if (!aScheduledToday && bScheduledToday) return 1;
+
+    // Se nenhum (ou ambos) for agendamento de hoje, segue a ordenação padrão original
     if (currentUser?.isAdmin) {
         const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
         const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
