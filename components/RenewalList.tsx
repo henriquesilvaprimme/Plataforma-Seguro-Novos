@@ -663,7 +663,7 @@ export const RenewalList: React.FC<RenewalListProps> = ({ leads, users, onUpdate
     });
 
     const [currentPage, setCurrentPage] = useState(1);
-    const itemsPerPage = 10;
+    const itemsPerPage = 20;
     
     // Ref para o container de rolagem
     const scrollContainerRef = useRef<HTMLDivElement>(null);
