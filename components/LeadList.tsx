@@ -652,7 +652,7 @@ export const LeadList: React.FC<LeadListProps> = ({ leads, users, onSelectLead, 
   const [showScheduleAlert, setShowScheduleAlert] = useState(false);
   
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10;
+  const itemsPerPage = 20;
   
   // Ref para o container de rolagem
   const scrollContainerRef = useRef<HTMLDivElement>(null);
