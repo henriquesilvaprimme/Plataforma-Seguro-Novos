@@ -1,4 +1,3 @@
-
 import React, { useMemo, useState } from 'react';
 import { Lead, LeadStatus } from '../types';
 import { FileBarChart2, DollarSign, Shield, Calendar, Search, CheckCircle, ChevronLeft, ChevronRight, Percent, Plus, Download } from './Icons';
@@ -37,10 +36,11 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
     return match ? parseInt(match[0]) : 1;
   };
 
-  const calculateCommissionRules = (netPremium: number, commissionPct: number, paymentMethod: string, installmentsStr: string, isPaid?: boolean) => {
+  const calculateCommissionRules = (netPremium: number, commissionPct: number, paymentMethod: string, installmentsStr: string, isPaid?: boolean, hasPortoCard?: boolean) => {
       const premium = netPremium || 0;
       const commPct = commissionPct || 0;
       const baseValue = premium * (commPct / 100);
+
       const inst = getInstallmentsNum(installmentsStr);
       const method = (paymentMethod || '').toUpperCase();
       
@@ -63,13 +63,17 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
           }
       }
 
-      // Se isPaid for true, installmentsCount permanece 1 (valor integral no mês)
-
       const monthlyComm = baseValue / installmentsCount;
-      const finalValueWithTax = monthlyComm * 0.85;
+      let finalValueWithTax = monthlyComm * 0.85;
+
+      // Regra: Adicionar R$ 51,00 se for Cartão Porto Novo (True) - SEM incidência de 85%
+      // O valor é dividido pelo número de parcelas para compor o total final de R$ 51,00 exatamente.
+      if (hasPortoCard) {
+          finalValueWithTax += (51 / installmentsCount);
+      }
       
       return { 
-        baseValue: baseValue,
+        baseValue: baseValue + (hasPortoCard ? 51 : 0),
         finalValue: finalValueWithTax, 
         installmentsCount: installmentsCount 
       };
@@ -105,7 +109,8 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
                 lead.dealInfo.commission, 
                 lead.dealInfo.paymentMethod, 
                 lead.dealInfo.installments,
-                lead.commissionPaid
+                lead.commissionPaid,
+                lead.cartaoPortoNovo
             );
 
             const monthDiff = (filterYear - startYear) * 12 + (filterMonth - startMonth);
@@ -129,7 +134,8 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
                      isFirstMonth,
                      currentInstallment: monthDiff + 1,
                      totalInstallments: installmentsCount,
-                     monthlyCommission: finalValue
+                     monthlyCommission: finalValue,
+                     hasPortoCard: !!lead.cartaoPortoNovo
                  });
             }
         }
@@ -275,7 +281,7 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
         <Cell ss:MergeAcross="1" ss:StyleID="cellBold"><Data ss:Type="String">TICKET MÉDIO</Data></Cell>
         <Cell ss:StyleID="cellNormal"><Data ss:Type="String">${formatMoney(getAvg(metrics.renewal.premium, metrics.renewal.count))}</Data></Cell>
         <Cell ss:MergeAcross="1" ss:StyleID="cellBold"><Data ss:Type="String">MÉDIA COMISSÃO</Data></Cell>
-        <Cell ss:StyleID="cellNormal"><Data ss:Type="String">${getAvg(metrics.renewal.commPctSum, metrics.renewal.count).toFixed(2)}%</Data></Cell>
+        <Cell ss:StyleID="cellNormal"><Data ss:Type="String">${getAvg(metricsGeneral.renewal.commPctSum, metricsGeneral.renewal.count).toFixed(2)}%</Data></Cell>
        </Row>`;
       }
 
@@ -305,7 +311,7 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
         <Cell ss:StyleID="cellNormal"><Data ss:Type="String">${item.insurer}</Data></Cell>
         <Cell ss:StyleID="cellNormal"><Data ss:Type="String">${item.isFirstMonth ? formatMoney(item.netPremium) : 'R$ 0,00'}</Data></Cell>
         <Cell ss:StyleID="cellNormal"><Data ss:Type="String">${item.commissionPct.toFixed(2)}%</Data></Cell>
-        <Cell ss:StyleID="cellNormal"><Data ss:Type="String">${formatMoney(item.netPremium * (item.commissionPct / 100))}</Data></Cell>
+        <Cell ss:StyleID="cellNormal"><Data ss:Type="String">${formatMoney((item.netPremium * (item.commissionPct / 100)) + (item.hasPortoCard && item.isFirstMonth ? 51 : 0))}</Data></Cell>
         <Cell ss:StyleID="cellNormal"><Data ss:Type="String">${item.paymentMethod}</Data></Cell>
         <Cell ss:StyleID="cellNormal"><Data ss:Type="String">${item.installments}</Data></Cell>
         <Cell ss:StyleID="cellGreen"><Data ss:Type="String">${formatMoney(item.monthlyCommission)}</Data></Cell>
@@ -318,7 +324,10 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
       return sheet;
     };
 
-    const collaborators = Array.from(new Set(allMonthlyItems.map(i => i.collaborator))).sort();
+    // Ensure collaborators are mapped as string to avoid unknown type issues in createWorksheetXML calls
+    // Fix: Explicitly type collaborators as string array and use String conversion to ensure compatibility.
+    // Explicitly typing the Set generic as string to fix 'unknown[]' to 'string[]' assignment error.
+    const collaborators: string[] = Array.from(new Set<string>(allMonthlyItems.map(i => String(i.collaborator)))).sort();
     
     const calculateMetricsSubset = (subset: any[]) => {
       const data = {
@@ -370,10 +379,11 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
     URL.revokeObjectURL(url);
   };
 
+  // Fix: toggleCheck uses any for dynamic indexing to avoid complex type intersection issues with negated values
   const toggleCheck = (lead: Lead, field: keyof Lead) => {
       if (!onUpdateLead) return;
       
-      const update: Partial<Lead> = { [field]: !lead[field] };
+      const update: any = { [field]: !lead[field] };
       
       if (field === 'commissionPaid' && update[field]) {
           update.commissionInstallmentPlan = false;
@@ -414,7 +424,8 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
             lead.dealInfo!.commission, 
             lead.dealInfo!.paymentMethod, 
             lead.dealInfo!.installments,
-            lead.commissionPaid
+            lead.commissionPaid,
+            lead.cartaoPortoNovo
           );
           return {
             ...lead,
@@ -570,7 +581,7 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
                                    <th className="px-4 py-3 text-[10px] font-bold text-blue-700 uppercase border-b">Nome</th>
                                    <th className="px-4 py-3 text-[10px] font-bold text-blue-700 uppercase border-b">Seguradora</th>
                                    <th className="px-4 py-3 text-[10px] font-bold text-blue-700 uppercase border-b">Prêmio Líquido</th>
-                                   <th className="px-4 py-3 text-[10px] font-bold text-blue-700 uppercase border-b text-center">% Com.</th>
+                                   <th className="px-4 py-3 text-[10px] font-bold text-blue-700 uppercase border-b text-center">% Com..</th>
                                    <th className="px-4 py-3 text-[10px] font-bold text-blue-700 uppercase border-b">Comissão Liq.</th>
                                    <th className="px-4 py-3 text-[10px] font-bold text-blue-700 uppercase border-b text-center">Ações</th>
                                </tr>
