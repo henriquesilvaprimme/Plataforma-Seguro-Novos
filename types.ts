@@ -1,4 +1,3 @@
-
 export enum LeadStatus {
   NEW = 'Novo',
   IN_CONTACT = 'Em Contato',
@@ -61,6 +60,7 @@ export interface Lead {
   commissionPaid?: boolean;
   commissionCP?: boolean;
   commissionInstallmentPlan?: boolean; // Novo: Define se segue a regra de parcelamento
+  commissionCustomInstallments?: number; // Novo: Número de parcelas definido manualmente
 
   // Dados do Fechamento (Novo)
   dealInfo?: DealInfo;
