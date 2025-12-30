@@ -17,6 +17,11 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
   const [filterDatePaid, setFilterDatePaid] = useState(() => new Date().toISOString().slice(0, 7));
   const [searchTermPaid, setSearchTermPaid] = useState('');
 
+  // Estados para o Modal de Parcelamento Manual da Comissão
+  const [isInstallmentModalOpen, setIsInstallmentModalOpen] = useState(false);
+  const [selectedLeadForInstallments, setSelectedLeadForInstallments] = useState<Lead | null>(null);
+  const [customInstallmentValue, setCustomInstallmentValue] = useState(1);
+
   const formatDisplayDate = (dateString?: string) => {
     if (!dateString) return '-';
     if (dateString.includes('/')) return dateString;
@@ -36,7 +41,7 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
     return match ? parseInt(match[0]) : 1;
   };
 
-  const calculateCommissionRules = (netPremium: number, commissionPct: number, paymentMethod: string, installmentsStr: string, isPaid?: boolean, hasPortoCard?: boolean) => {
+  const calculateCommissionRules = (netPremium: number, commissionPct: number, paymentMethod: string, installmentsStr: string, isPaid?: boolean, hasPortoCard?: boolean, customInstallments?: number) => {
       const premium = netPremium || 0;
       const commPct = commissionPct || 0;
       const baseValue = premium * (commPct / 100);
@@ -46,19 +51,19 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
       
       let installmentsCount = 1;
 
-      // Se NÃO estiver marcada como PAGA, aplica as regras automáticas de parcelamento
-      if (!isPaid) {
+      // Prioridade 1: Parcelamento Manual Escolhido pelo Usuário
+      if (customInstallments && customInstallments > 0) {
+          installmentsCount = customInstallments;
+      } 
+      // Prioridade 2: Regras Automáticas (se NÃO estiver marcado como integral/pago)
+      else if (!isPaid) {
           if (method.includes('CARTÃO PORTO') || method.includes('CP')) {
-              // Parcelamento em Cartão Porto Seguro: 1x a 12x é sempre à vista (1 parcela)
               installmentsCount = 1;
           } else if (method.includes('CRÉDITO') || method.includes('CREDITO') || method === 'CC') {
-              // Cartão de Crédito: 1x a 6x à vista, 7x a 12x dividido
               installmentsCount = inst >= 7 ? inst : 1;
           } else if (method.includes('DÉBITO') || method.includes('DEBITO')) {
-              // Débito: 1x a 4x à vista, 5x a 12x dividido
               installmentsCount = inst >= 5 ? inst : 1;
           } else if (method.includes('BOLETO')) {
-              // Boleto: 1x a 3x à vista, 4x a 12x dividido
               installmentsCount = inst >= 4 ? inst : 1;
           }
       }
@@ -66,8 +71,6 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
       const monthlyComm = baseValue / installmentsCount;
       let finalValueWithTax = monthlyComm * 0.85;
 
-      // Regra: Adicionar R$ 51,00 se for Cartão Porto Novo (True) - SEM incidência de 85%
-      // O valor é dividido pelo número de parcelas para compor o total final de R$ 51,00 exatamente.
       if (hasPortoCard) {
           finalValueWithTax += (51 / installmentsCount);
       }
@@ -110,12 +113,12 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
                 lead.dealInfo.paymentMethod, 
                 lead.dealInfo.installments,
                 lead.commissionPaid,
-                lead.cartaoPortoNovo
+                lead.cartaoPortoNovo,
+                lead.commissionInstallmentPlan ? lead.commissionCustomInstallments : undefined
             );
 
             const monthDiff = (filterYear - startYear) * 12 + (filterMonth - startMonth);
 
-            // Verifica se o mês visualizado está dentro da janela de parcelas
             if (monthDiff >= 0 && monthDiff < installmentsCount) {
                  const isFirstMonth = monthDiff === 0;
                  
@@ -156,10 +159,7 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
     };
 
     allMonthlyItems.forEach(item => {
-        // Comissão acumulada para este mês (pode ser parcela ou integral)
         data.general.commission += item.monthlyCommission;
-
-        // Prêmio e Contagem somente se for o primeiro mês da vigência para não duplicar contagem de itens
         if (item.isFirstMonth) {
             data.general.premium += item.netPremium || 0;
             data.general.count++;
@@ -324,9 +324,6 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
       return sheet;
     };
 
-    // Ensure collaborators are mapped as string to avoid unknown type issues in createWorksheetXML calls
-    // Fix: Explicitly type collaborators as string array and use String conversion to ensure compatibility.
-    // Explicitly typing the Set generic as string to fix 'unknown[]' to 'string[]' assignment error.
     const collaborators: string[] = Array.from(new Set<string>(allMonthlyItems.map(i => String(i.collaborator)))).sort();
     
     const calculateMetricsSubset = (subset: any[]) => {
@@ -379,19 +376,42 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
     URL.revokeObjectURL(url);
   };
 
-  // Fix: toggleCheck uses any for dynamic indexing to avoid complex type intersection issues with negated values
   const toggleCheck = (lead: Lead, field: keyof Lead) => {
       if (!onUpdateLead) return;
       
+      // Se estiver clicando em PARCELADO e ele estiver FALSO, abre o modal
+      if (field === 'commissionInstallmentPlan' && !lead.commissionInstallmentPlan) {
+          setSelectedLeadForInstallments(lead);
+          setCustomInstallmentValue(1);
+          setIsInstallmentModalOpen(true);
+          return;
+      }
+
       const update: any = { [field]: !lead[field] };
       
       if (field === 'commissionPaid' && update[field]) {
           update.commissionInstallmentPlan = false;
-      } else if (field === 'commissionInstallmentPlan' && update[field]) {
-          update.commissionPaid = false;
+          update.commissionCustomInstallments = 0;
+      } else if (field === 'commissionInstallmentPlan' && !update[field]) {
+          // Se desligou o parcelado, limpa o valor manual
+          update.commissionCustomInstallments = 0;
       }
 
       onUpdateLead({ ...lead, ...update });
+  };
+
+  const handleConfirmManualInstallments = () => {
+      if (!selectedLeadForInstallments || !onUpdateLead) return;
+
+      onUpdateLead({
+          ...selectedLeadForInstallments,
+          commissionInstallmentPlan: true,
+          commissionPaid: false,
+          commissionCustomInstallments: customInstallmentValue
+      });
+
+      setIsInstallmentModalOpen(false);
+      setSelectedLeadForInstallments(null);
   };
 
   const paidItems = useMemo(() => {
@@ -425,7 +445,8 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
             lead.dealInfo!.paymentMethod, 
             lead.dealInfo!.installments,
             lead.commissionPaid,
-            lead.cartaoPortoNovo
+            lead.cartaoPortoNovo,
+            lead.commissionInstallmentPlan ? lead.commissionCustomInstallments : undefined
           );
           return {
             ...lead,
@@ -602,7 +623,7 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
                                                </button>
                                                
                                                <button onClick={() => toggleCheck(lead, 'commissionInstallmentPlan')} className={`flex items-center gap-1 px-2 py-1 rounded border text-[10px] font-bold transition-all ${lead.commissionInstallmentPlan ? 'bg-indigo-600 text-white border-indigo-700' : 'bg-gray-100 text-gray-400 border-gray-200 hover:border-indigo-500 hover:text-indigo-600'}`}>
-                                                    <Calendar className="w-3 h-3" /> PARCELADO
+                                                    <Calendar className="w-3 h-3" /> PARCELADO {lead.commissionInstallmentPlan && lead.commissionCustomInstallments ? `(${lead.commissionCustomInstallments}x)` : ''}
                                                </button>
 
                                                {lead.cartaoPortoNovo && (
@@ -623,6 +644,56 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
                </section>
            )}
        </div>
+
+       {/* POP-UP PARA ESCOLHER PARCELAMENTO DA COMISSÃO */}
+       {isInstallmentModalOpen && selectedLeadForInstallments && (
+           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fade-in">
+               <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden flex flex-col border border-gray-200">
+                    <div className="bg-indigo-600 px-6 py-4 flex justify-between items-center text-white">
+                        <h2 className="font-bold text-lg flex items-center gap-2">
+                            <Calendar className="w-5 h-5" /> Parcelar Comissão
+                        </h2>
+                        <button onClick={() => setIsInstallmentModalOpen(false)} className="hover:text-gray-200 transition-colors">✕</button>
+                    </div>
+                    <div className="p-6 space-y-4">
+                        <p className="text-sm text-gray-600">
+                            Escolha em quantas vezes a comissão do cliente <b>{selectedLeadForInstallments.name}</b> será parcelada no relatório.
+                        </p>
+                        <div>
+                            <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Número de Parcelas</label>
+                            <select 
+                                value={customInstallmentValue}
+                                onChange={(e) => setCustomInstallmentValue(Number(e.target.value))}
+                                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none bg-white cursor-pointer"
+                            >
+                                {Array.from({ length: 12 }, (_, i) => i + 1).map(num => (
+                                    <option key={num} value={num}>{num}x</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div className="bg-gray-50 p-3 rounded-lg border border-gray-100">
+                            <p className="text-xs text-gray-500">
+                                A comissão total estimada será dividida por <b>{customInstallmentValue}</b> e distribuída nos próximos meses subsequentes ao início da vigência.
+                            </p>
+                        </div>
+                    </div>
+                    <div className="p-6 pt-0 flex gap-3">
+                        <button 
+                            onClick={() => setIsInstallmentModalOpen(false)} 
+                            className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded hover:bg-gray-50 font-bold text-sm transition-colors"
+                        >
+                            Cancelar
+                        </button>
+                        <button 
+                            onClick={handleConfirmManualInstallments} 
+                            className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 font-bold text-sm shadow-md transition-all"
+                        >
+                            Confirmar
+                        </button>
+                    </div>
+               </div>
+           </div>
+       )}
     </div>
   );
 };
