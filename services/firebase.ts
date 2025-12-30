@@ -1,4 +1,3 @@
-
 // @ts-ignore
 import { initializeApp } from "firebase/app";
 // @ts-ignore
@@ -113,6 +112,7 @@ export const mapDocumentToLead = (doc: any): Lead => {
         commissionPaid: data.commissionPaid || false,
         commissionCP: data.commissionCP || false,
         commissionInstallmentPlan: data.commissionInstallmentPlan || false,
+        commissionCustomInstallments: data.commissionCustomInstallments || 0,
         dealInfo: (data.Seguradora || data.PremioLiquido || data.VigenciaInicial) ? {
             insurer: data.Seguradora || '',
             netPremium: parseCurrency(data.PremioLiquido),
@@ -184,7 +184,8 @@ const mapAppToDb = (collectionName: string, data: any) => {
         CartaoPortoNovo: data.cartaoPortoNovo || false,
         commissionPaid: data.commissionPaid || false,
         commissionCP: data.commissionCP || false,
-        commissionInstallmentPlan: data.commissionInstallmentPlan || false
+        commissionInstallmentPlan: data.commissionInstallmentPlan || false,
+        commissionCustomInstallments: data.commissionCustomInstallments || 0
     };
 
     if (data.dealInfo) {
