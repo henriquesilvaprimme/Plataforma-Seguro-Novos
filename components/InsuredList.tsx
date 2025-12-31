@@ -49,14 +49,12 @@ const VehicleCard: React.FC<{ lead: Lead; onUpdate: (l: Lead) => void }> = ({ le
   const isCancelled = lead.status === LeadStatus.LOST;
 
   const handleCancelLead = () => {
-    if (confirm("Tem certeza que deseja cancelar este seguro? O cliente voltará para a lista de tarefas como 'Novo'.")) {
-      // Retorna o status para Novo para reaparecer nas abas de tarefas (Meus Leads / Renovações)
-      // Mantém o responsável atribuído conforme solicitado
+    if (confirm("Tem certeza que deseja cancelar este seguro? O status será alterado para 'Perdido' e o cliente voltará para 'Novo' na aba Meus Leads.")) {
+      // Altera o status para Perdido conforme solicitado.
+      // O twin na aba Meus Leads será resetado para Novo via lógica no App.tsx
       onUpdate({ 
         ...lead, 
-        status: LeadStatus.NEW,
-        dealInfo: undefined, // Remove dados do fechamento anterior
-        closedAt: undefined,
+        status: LeadStatus.LOST,
         commissionPaid: false,
         commissionCP: false,
         commissionInstallmentPlan: false,
