@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Lead, LeadStatus, Endorsement } from '../types';
 import { Search, FileText, Car, Edit, XCircle, AlertTriangle, Calendar, DollarSign, Percent, CreditCard, Shield } from './Icons';
@@ -50,8 +49,19 @@ const VehicleCard: React.FC<{ lead: Lead; onUpdate: (l: Lead) => void }> = ({ le
   const isCancelled = lead.status === LeadStatus.LOST;
 
   const handleCancelLead = () => {
-    if (confirm("Tem certeza que deseja cancelar este seguro?")) {
-      onUpdate({ ...lead, status: LeadStatus.LOST });
+    if (confirm("Tem certeza que deseja cancelar este seguro? O cliente voltará para a lista de tarefas como 'Novo'.")) {
+      // Retorna o status para Novo para reaparecer nas abas de tarefas (Meus Leads / Renovações)
+      // Mantém o responsável atribuído conforme solicitado
+      onUpdate({ 
+        ...lead, 
+        status: LeadStatus.NEW,
+        dealInfo: undefined, // Remove dados do fechamento anterior
+        closedAt: undefined,
+        commissionPaid: false,
+        commissionCP: false,
+        commissionInstallmentPlan: false,
+        commissionCustomInstallments: 0
+      });
     }
   };
 
@@ -91,7 +101,7 @@ const VehicleCard: React.FC<{ lead: Lead; onUpdate: (l: Lead) => void }> = ({ le
   };
 
   return (
-    <div className={`border rounded-xl p-5 shadow-sm relative transition-colors ${isCancelled ? 'bg-red-50 border-red-200' : 'bg-white border-gray-200'}`}>
+    <div className={`border rounded-xl p-5 shadow-sm relative transition-all duration-300 ${isCancelled ? 'bg-red-50 border-red-200 opacity-60' : 'bg-white border-gray-200 hover:shadow-md'}`}>
        {/* Card Content Expanded to match Ranking Size */}
        <div className="flex flex-col gap-4">
           
