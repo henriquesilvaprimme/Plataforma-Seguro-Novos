@@ -41,7 +41,7 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
     return match ? parseInt(match[0]) : 1;
   };
 
-  const calculateCommissionRules = (netPremium: number, commissionPct: number, paymentMethod: string, installmentsStr: string, isPaid?: boolean, hasPortoCard?: boolean, customInstallments?: number) => {
+  const calculateCommissionRules = (netPremium: number, commissionPct: number, paymentMethod: string, installmentsStr: string, isPaid?: boolean, hasPortoCard?: boolean, customInstallments?: number, isCPPaid?: boolean, isFirstInstallment: boolean = false) => {
       const premium = netPremium || 0;
       const commPct = commissionPct || 0;
       const baseValue = premium * (commPct / 100);
@@ -68,16 +68,33 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
           }
       }
 
-      const monthlyComm = baseValue / installmentsCount;
-      let finalValueWithTax = monthlyComm * 0.85;
+      const monthlyCommBase = baseValue / installmentsCount;
+      const finalBaseWithTax = monthlyCommBase * 0.85;
+      const bonusPortion = hasPortoCard ? (51 / installmentsCount) : 0;
+      
+      const totalMonthlyValue = finalBaseWithTax + bonusPortion;
 
-      if (hasPortoCard) {
-          finalValueWithTax += (51 / installmentsCount);
+      // Cálculo do que ainda é pendente para este item/mês específico
+      let pendingValue = 0;
+      
+      if (isPaid) {
+          pendingValue += 0;
+      } else if (customInstallments && customInstallments > 0) {
+          if (!isFirstInstallment) {
+              pendingValue += finalBaseWithTax;
+          }
+      } else {
+          pendingValue += finalBaseWithTax;
+      }
+
+      if (hasPortoCard && !isCPPaid) {
+          pendingValue += bonusPortion;
       }
       
       return { 
         baseValue: baseValue + (hasPortoCard ? 51 : 0),
-        finalValue: finalValueWithTax, 
+        finalValue: totalMonthlyValue, 
+        pendingValue: pendingValue,
         installmentsCount: installmentsCount 
       };
   };
@@ -106,22 +123,22 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
             }
             
             const [startYear, startMonth] = normalizedStart.split('-').map(Number);
-            
-            const { finalValue, installmentsCount } = calculateCommissionRules(
+            const monthDiff = (filterYear - startYear) * 12 + (filterMonth - startMonth);
+            const isFirstMonth = monthDiff === 0;
+
+            const { finalValue, pendingValue, installmentsCount } = calculateCommissionRules(
                 lead.dealInfo.netPremium, 
                 lead.dealInfo.commission, 
                 lead.dealInfo.paymentMethod, 
                 lead.dealInfo.installments,
                 lead.commissionPaid,
                 lead.cartaoPortoNovo,
-                lead.commissionInstallmentPlan ? lead.commissionCustomInstallments : undefined
+                lead.commissionInstallmentPlan ? lead.commissionCustomInstallments : undefined,
+                lead.commissionCP,
+                isFirstMonth
             );
 
-            const monthDiff = (filterYear - startYear) * 12 + (filterMonth - startMonth);
-
             if (monthDiff >= 0 && monthDiff < installmentsCount) {
-                 const isFirstMonth = monthDiff === 0;
-                 
                  items.push({
                      id: lead.id,
                      type: 'SALE',
@@ -138,6 +155,7 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
                      currentInstallment: monthDiff + 1,
                      totalInstallments: installmentsCount,
                      monthlyCommission: finalValue,
+                     pendingCommission: pendingValue,
                      hasPortoCard: !!lead.cartaoPortoNovo
                  });
             }
@@ -153,13 +171,15 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
 
   const metricsGeneral = useMemo(() => {
     const data = {
-        general: { premium: 0, commission: 0, count: 0, commPctSum: 0 },
+        general: { premium: 0, commission: 0, count: 0, commPctSum: 0, pending: 0 },
         new: { premium: 0, commission: 0, count: 0, commPctSum: 0 },
         renewal: { premium: 0, commission: 0, count: 0, commPctSum: 0 }
     };
 
     allMonthlyItems.forEach(item => {
         data.general.commission += item.monthlyCommission;
+        data.general.pending += item.pendingCommission;
+
         if (item.isFirstMonth) {
             data.general.premium += item.netPremium || 0;
             data.general.count++;
@@ -393,7 +413,6 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
           update.commissionInstallmentPlan = false;
           update.commissionCustomInstallments = 0;
       } else if (field === 'commissionInstallmentPlan' && !update[field]) {
-          // Se desligou o parcelado, limpa o valor manual
           update.commissionCustomInstallments = 0;
       }
 
@@ -415,47 +434,116 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
   };
 
   const paidItems = useMemo(() => {
-    const allItems = [...leads, ...renewed]; 
+    const allItems = [...leads, ...renewed, ...renewals]; 
     const term = searchTermPaid.toLowerCase();
     const seenIds = new Set();
-    return allItems
-      .filter(lead => {
+    const result: any[] = [];
+
+    const [fYear, fMonth] = filterDatePaid.split('-').map(Number);
+
+    const uniqueLeads = allItems.filter(lead => {
         if (seenIds.has(lead.id)) return false;
-        const isClosed = lead.status === LeadStatus.CLOSED && !!lead.dealInfo;
-        if (!isClosed) return false;
+        seenIds.add(lead.id);
+        return true;
+    });
+
+    uniqueLeads.forEach(lead => {
+        if (lead.status !== LeadStatus.CLOSED || !lead.dealInfo) return;
+
         const name = (lead.name || '').toLowerCase();
         const phone = (lead.phone || '');
         const matchesSearch = name.includes(term) || phone.includes(term);
-        const startDate = lead.dealInfo?.startDate || '';
-        let normalizedDate = startDate;
-        if (startDate.includes('/')) {
-            const [d, m, y] = startDate.split('/');
-            normalizedDate = `${y}-${m}-${d}`;
+        if (!matchesSearch) return;
+
+        const startDateStr = lead.dealInfo.startDate;
+        let normalizedStart = startDateStr;
+        if (startDateStr.includes('/')) {
+            const [d, m, y] = startDateStr.split('/');
+            normalizedStart = `${y}-${m}-${d}`;
         }
-        if (matchesSearch && normalizedDate.startsWith(filterDatePaid)) {
-            seenIds.add(lead.id);
-            return true;
+        const [startYear, startMonth] = normalizedStart.split('-').map(Number);
+        const monthDiff = (fYear - startYear) * 12 + (fMonth - startMonth);
+
+        const isInstallment = lead.commissionInstallmentPlan;
+        const installmentsCount = isInstallment ? (lead.commissionCustomInstallments || 1) : 1;
+        const hasCP = lead.cartaoPortoNovo;
+        const isCPPaid = lead.commissionCP;
+
+        // Se monthDiff < 0, significa que o seguro ainda nem começou, não aparece em Seguros Pagos.
+        if (monthDiff < 0) return;
+
+        // Regra 1: No mês da Vigência (Month 0) - Mostra tudo
+        if (monthDiff === 0) {
+            const { finalValue, pendingValue } = calculateCommissionRules(
+                lead.dealInfo.netPremium, lead.dealInfo.commission, lead.dealInfo.paymentMethod, lead.dealInfo.installments,
+                lead.commissionPaid, lead.cartaoPortoNovo, lead.commissionInstallmentPlan ? lead.commissionCustomInstallments : undefined,
+                lead.commissionCP, true
+            );
+            result.push({
+                ...lead,
+                displayType: 'REGULAR',
+                commissionValue: finalValue,
+                pendingValue: pendingValue,
+                installmentText: isInstallment ? `1/${installmentsCount}` : null
+            });
         }
-        return false;
-      })
-      .map(lead => {
-          const { finalValue } = calculateCommissionRules(
-            lead.dealInfo!.netPremium, 
-            lead.dealInfo!.commission, 
-            lead.dealInfo!.paymentMethod, 
-            lead.dealInfo!.installments,
-            lead.commissionPaid,
-            lead.cartaoPortoNovo,
-            lead.commissionInstallmentPlan ? lead.commissionCustomInstallments : undefined
-          );
-          return {
-            ...lead,
-            commissionValue: finalValue,
-            normalizedStartDate: lead.dealInfo?.startDate.includes('/') ? lead.dealInfo.startDate.split('/').reverse().join('-') : lead.dealInfo?.startDate || ''
-          };
-      })
-      .sort((a, b) => a.normalizedStartDate.localeCompare(b.normalizedStartDate));
-  }, [leads, renewed, searchTermPaid, filterDatePaid]);
+        // Regra 2: Meses Futuros (Month > 0)
+        else {
+            // Se marcado como integralmente PAGA, não aparece mais em meses futuros
+            if (lead.commissionPaid) return;
+
+            // Caso A: Sem nenhum status (Pendente Total)
+            if (!isInstallment) {
+                 const { finalValue, pendingValue } = calculateCommissionRules(
+                    lead.dealInfo.netPremium, lead.dealInfo.commission, lead.dealInfo.paymentMethod, lead.dealInfo.installments,
+                    false, lead.cartaoPortoNovo, undefined, lead.commissionCP, false
+                 );
+                 result.push({
+                    ...lead,
+                    displayType: 'PENDING_PAST',
+                    commissionValue: finalValue,
+                    pendingValue: pendingValue,
+                    installmentText: null
+                 });
+            } 
+            // Caso B: Parcelado (Mostra progresso e apenas botão Paga)
+            else if (isInstallment && monthDiff < installmentsCount) {
+                const { finalValue, pendingValue } = calculateCommissionRules(
+                    lead.dealInfo.netPremium, lead.dealInfo.commission, lead.dealInfo.paymentMethod, lead.dealInfo.installments,
+                    false, lead.cartaoPortoNovo, installmentsCount, lead.commissionCP, false
+                );
+                // No Parcelado, conforme regra, somamos apenas a parcela como pendente
+                result.push({
+                    ...lead,
+                    displayType: 'INSTALLMENT',
+                    commissionValue: finalValue,
+                    pendingValue: pendingValue,
+                    installmentText: `${monthDiff + 1}/${installmentsCount}`
+                });
+            }
+            
+            // Caso C: Bônus CP avulso (Aparece se CP não foi acionado, e se o lead não estiver já aparecendo como PENDING_PAST)
+            // Se estiver como PENDING_PAST, o botão CP já aparece lá.
+            if (hasCP && !isCPPaid && isInstallment && monthDiff >= installmentsCount) {
+                 const bonusPortion = (51 / installmentsCount);
+                 result.push({
+                    ...lead,
+                    displayType: 'CP_ONLY',
+                    commissionValue: bonusPortion,
+                    pendingValue: bonusPortion,
+                    installmentText: null
+                 });
+            }
+        }
+    });
+
+    return result.sort((a, b) => a.name.localeCompare(b.name));
+  }, [leads, renewed, renewals, searchTermPaid, filterDatePaid]);
+
+  // Cálculo do total pendente seguindo rigorosamente o filtro de data da aba de Seguros Pagos
+  const totalPendingPaid = useMemo(() => {
+    return paidItems.reduce((acc, item) => acc + (item.pendingValue || 0), 0);
+  }, [paidItems]);
 
   return (
     <div className="h-full flex flex-col animate-fade-in space-y-4">
@@ -583,65 +671,85 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
            )}
 
            {activeTab === 'PAID_INSURANCES' && (
-               <section className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-col animate-fade-in">
-                   <div className="p-4 border-b border-gray-100 bg-gray-50 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                       <div className="flex items-center gap-2">
-                           <DollarSign className="w-5 h-5 text-blue-600" />
-                           <h3 className="font-bold text-gray-800">Pesquisar Seguros Pagos</h3>
-                       </div>
-                       <div className="relative w-full md:w-80">
-                           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
-                           <input type="text" placeholder="Nome ou Telefone..." value={searchTermPaid} onChange={(e) => setSearchTermPaid(e.target.value)} className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
-                       </div>
+               <div className="space-y-4 animate-fade-in">
+                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="bg-gradient-to-br from-rose-600 to-rose-700 p-4 rounded-xl shadow-lg text-white">
+                            <p className="text-xs font-medium text-rose-100 uppercase">Total de Comissão Pendente</p>
+                            <p className="text-2xl font-bold mt-1">{formatMoney(totalPendingPaid)}</p>
+                        </div>
                    </div>
-                   <div className="overflow-x-auto">
-                       <table className="w-full text-left border-collapse">
-                           <thead className="bg-gray-50">
-                               <tr>
-                                   <th className="px-4 py-3 text-[10px] font-bold text-blue-700 uppercase border-b">Vigência</th>
-                                   <th className="px-4 py-3 text-[10px] font-bold text-blue-700 uppercase border-b">Nome</th>
-                                   <th className="px-4 py-3 text-[10px] font-bold text-blue-700 uppercase border-b">Seguradora</th>
-                                   <th className="px-4 py-3 text-[10px] font-bold text-blue-700 uppercase border-b">Prêmio Líquido</th>
-                                   <th className="px-4 py-3 text-[10px] font-bold text-blue-700 uppercase border-b text-center">% Com..</th>
-                                   <th className="px-4 py-3 text-[10px] font-bold text-blue-700 uppercase border-b">Comissão Liq.</th>
-                                   <th className="px-4 py-3 text-[10px] font-bold text-blue-700 uppercase border-b text-center">Ações</th>
-                               </tr>
-                           </thead>
-                           <tbody className="divide-y divide-gray-100">
-                               {paidItems.map(lead => (
-                                   <tr key={lead.id} className="hover:bg-gray-50 transition-colors">
-                                       <td className="px-4 py-3 text-xs font-bold text-gray-600 whitespace-nowrap">{formatDisplayDate(lead.dealInfo?.startDate)}</td>
-                                       <td className="px-4 py-3 text-xs font-bold text-gray-900">{lead.name}</td>
-                                       <td className="px-4 py-3 text-xs text-gray-700">{lead.dealInfo?.insurer}</td>
-                                       <td className="px-4 py-3 text-xs font-bold text-gray-900">{formatMoney(lead.dealInfo?.netPremium || 0)}</td>
-                                       <td className="px-4 py-3 text-xs font-bold text-indigo-600 text-center">{lead.dealInfo?.commission}%</td>
-                                       <td className="px-4 py-3 text-xs font-bold text-green-700 bg-green-50/50">{formatMoney(lead.commissionValue || 0)}</td>
-                                       <td className="px-4 py-3">
-                                           <div className="flex items-center justify-center gap-2">
-                                               <button onClick={() => toggleCheck(lead, 'commissionPaid')} className={`flex items-center gap-1 px-2 py-1 rounded border text-[10px] font-bold transition-all ${lead.commissionPaid ? 'bg-green-600 text-white border-green-700' : 'bg-gray-100 text-gray-400 border-gray-200 hover:border-green-500 hover:text-green-600'}`}>
-                                                    <CheckCircle className="w-3 h-3" /> PAGA
-                                               </button>
-                                               
-                                               <button onClick={() => toggleCheck(lead, 'commissionInstallmentPlan')} className={`flex items-center gap-1 px-2 py-1 rounded border text-[10px] font-bold transition-all ${lead.commissionInstallmentPlan ? 'bg-indigo-600 text-white border-indigo-700' : 'bg-gray-100 text-gray-400 border-gray-200 hover:border-indigo-500 hover:text-indigo-600'}`}>
-                                                    <Calendar className="w-3 h-3" /> PARCELADO {lead.commissionInstallmentPlan && lead.commissionCustomInstallments ? `(${lead.commissionCustomInstallments}x)` : ''}
-                                               </button>
 
-                                               {lead.cartaoPortoNovo && (
-                                                   <button onClick={() => toggleCheck(lead, 'commissionCP')} className={`flex items-center gap-1 px-2 py-1 rounded border text-[10px] font-bold transition-all ${lead.commissionCP ? 'bg-blue-600 text-white border-blue-700' : 'bg-gray-100 text-gray-400 border-gray-200 hover:border-blue-500 hover:text-blue-600'}`}>
-                                                        <DollarSign className="w-3 h-3" /> CP
-                                                   </button>
-                                               )}
-                                           </div>
-                                       </td>
-                                   </tr>
-                               ))}
-                               {paidItems.length === 0 && (
-                                   <tr><td colSpan={7} className="px-4 py-12 text-center text-gray-400 text-sm italic">Nenhum registro encontrado.</td></tr>
-                               )}
-                           </tbody>
-                       </table>
-                   </div>
-               </section>
+                   <section className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-col">
+                        <div className="p-4 border-b border-gray-100 bg-gray-50 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                            <div className="flex items-center gap-2">
+                                <DollarSign className="w-5 h-5 text-blue-600" />
+                                <h3 className="font-bold text-gray-800">Pesquisar Seguros Pagos</h3>
+                            </div>
+                            <div className="relative w-full md:w-80">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+                                <input type="text" placeholder="Nome ou Telefone..." value={searchTermPaid} onChange={(e) => setSearchTermPaid(e.target.value)} className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
+                            </div>
+                        </div>
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left border-collapse">
+                                <thead className="bg-gray-50">
+                                    <tr>
+                                        <th className="px-4 py-3 text-[10px] font-bold text-blue-700 uppercase border-b">Vigência</th>
+                                        <th className="px-4 py-3 text-[10px] font-bold text-blue-700 uppercase border-b">Nome</th>
+                                        <th className="px-4 py-3 text-[10px] font-bold text-blue-700 uppercase border-b">Seguradora</th>
+                                        <th className="px-4 py-3 text-[10px] font-bold text-blue-700 uppercase border-b">Prêmio Líquido</th>
+                                        <th className="px-4 py-3 text-[10px] font-bold text-blue-700 uppercase border-b text-center">% Com..</th>
+                                        <th className="px-4 py-3 text-[10px] font-bold text-blue-700 uppercase border-b">Comissão Liq.</th>
+                                        <th className="px-4 py-3 text-[10px] font-bold text-blue-700 uppercase border-b text-center">Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100">
+                                    {paidItems.map((item, idx) => (
+                                        <tr key={item.id + item.displayType + idx} className="hover:bg-gray-50 transition-colors">
+                                            <td className="px-4 py-3 text-xs font-bold text-gray-600 whitespace-nowrap">{formatDisplayDate(item.dealInfo?.startDate)}</td>
+                                            <td className="px-4 py-3 text-xs font-bold text-gray-900">{item.name}</td>
+                                            <td className="px-4 py-3 text-xs text-gray-700">{item.dealInfo?.insurer}</td>
+                                            <td className="px-4 py-3 text-xs font-bold text-gray-900">{item.displayType === 'CP_ONLY' ? 'R$ 0,00' : formatMoney(item.dealInfo?.netPremium || 0)}</td>
+                                            <td className="px-4 py-3 text-xs font-bold text-indigo-600 text-center">{item.displayType === 'CP_ONLY' ? '-' : `${item.dealInfo?.commission}%`}</td>
+                                            <td className="px-4 py-3 text-xs font-bold text-green-700 bg-green-50/50">{formatMoney(item.commissionValue || 0)}</td>
+                                            <td className="px-4 py-3">
+                                                <div className="flex items-center justify-center gap-2">
+                                                    {(item.displayType === 'REGULAR' || item.displayType === 'PENDING_PAST' || item.displayType === 'INSTALLMENT') && (
+                                                        <>
+                                                            {item.displayType === 'INSTALLMENT' && (
+                                                                <span className="text-[10px] font-extrabold text-indigo-700 bg-indigo-50 px-2 py-1 rounded border border-indigo-100">
+                                                                    {item.installmentText}
+                                                                </span>
+                                                            )}
+                                                            <button onClick={() => toggleCheck(item, 'commissionPaid')} className={`flex items-center gap-1 px-2 py-1 rounded border text-[10px] font-bold transition-all ${item.commissionPaid ? 'bg-green-600 text-white border-green-700' : 'bg-gray-100 text-gray-400 border-gray-200 hover:border-green-500 hover:text-green-600'}`}>
+                                                                    <CheckCircle className="w-3 h-3" /> PAGA
+                                                            </button>
+                                                        </>
+                                                    )}
+                                                    
+                                                    {(item.displayType === 'REGULAR' || item.displayType === 'PENDING_PAST') && (
+                                                        <button onClick={() => toggleCheck(item, 'commissionInstallmentPlan')} className={`flex items-center gap-1 px-2 py-1 rounded border text-[10px] font-bold transition-all ${item.commissionInstallmentPlan ? 'bg-indigo-600 text-white border-indigo-700' : 'bg-gray-100 text-gray-400 border-gray-200 hover:border-indigo-500 hover:text-indigo-600'}`}>
+                                                                <Calendar className="w-3 h-3" /> PARCELADO {item.commissionInstallmentPlan && item.commissionCustomInstallments ? `(${item.commissionCustomInstallments}x)` : ''}
+                                                        </button>
+                                                    )}
+
+                                                    {(item.displayType === 'REGULAR' || item.displayType === 'PENDING_PAST' || item.displayType === 'CP_ONLY') && item.cartaoPortoNovo && (
+                                                        <button onClick={() => toggleCheck(item, 'commissionCP')} className={`flex items-center gap-1 px-2 py-1 rounded border text-[10px] font-bold transition-all ${item.commissionCP ? 'bg-blue-600 text-white border-blue-700' : 'bg-gray-100 text-gray-400 border-gray-200 hover:border-blue-500 hover:text-blue-600'}`}>
+                                                                <DollarSign className="w-3 h-3" /> CP
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                    {paidItems.length === 0 && (
+                                        <tr><td colSpan={7} className="px-4 py-12 text-center text-gray-400 text-sm italic">Nenhum registro pendente para este período.</td></tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                   </section>
+               </div>
            )}
        </div>
 
