@@ -243,7 +243,7 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
   </Style>
  </Styles>`;
 
-    const createWorksheetXML = (name: string, items: any[], metrics: any, showDetailed: boolean = false) => {
+    const createWorksheetXML = (name: string, items: any[], metrics: any, showDetailed: boolean = false, tierMultiplier: number = 1) => {
       const isGeneral = name === 'GERAL';
       let sheet = `<Worksheet ss:Name="${name.substring(0, 31).replace(/[\[\]\*\?\/\\]/g, '')}">
       <Table ss:ExpandedColumnCount="13">
@@ -262,7 +262,7 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
        <Column ss:Width="120"/>
        
        <Row ss:Height="25">
-        <Cell ss:MergeAcross="12" ss:StyleID="headerMain"><Data ss:Type="String">RELATÓRIO DE PRODUÇÃO - ${filterDate} ${name !== 'GERAL' ? `(${name})` : ''}</Data></Cell>
+        <Cell ss:MergeAcross="12" ss:StyleID="headerMain"><Data ss:Type="String">RELATÓRIO DE PRODUÇÃO - ${filterDate} ${name !== 'GERAL' ? `(${name}) [TIER: ${(tierMultiplier*100).toFixed(0)}%]` : ''}</Data></Cell>
        </Row>
        <Row ss:Index="3">
         <Cell ss:MergeAcross="12" ss:StyleID="headerSection"><Data ss:Type="String">RESUMO GERAL</Data></Cell>
@@ -325,8 +325,13 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
 
       items.forEach(item => {
         const bonusToSubtract = (!isGeneral && item.hasPortoCard) ? (51 / item.totalInstallments) : 0;
-        const displayMonthlyCommission = item.monthlyCommission - bonusToSubtract;
-        const baseBonus = (!isGeneral || !item.isFirstMonth) ? 0 : (item.hasPortoCard ? 51 : 0);
+        let displayMonthlyCommission = item.monthlyCommission - bonusToSubtract;
+        
+        // Regra do Escalonamento: Multiplica pela porcentagem do tier se não for aba GERAL
+        if (!isGeneral) {
+            displayMonthlyCommission *= tierMultiplier;
+        }
+
         const displayBaseCommissionValue = (item.netPremium * (item.commissionPct / 100)) + (isGeneral && item.hasPortoCard && item.isFirstMonth ? 51 : 0);
 
         sheet += `<Row>
@@ -352,7 +357,7 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
 
     const collaborators: string[] = Array.from(new Set<string>(allMonthlyItems.map(i => String(i.collaborator)))).sort();
     
-    const calculateMetricsSubset = (subset: any[], isGeneral: boolean) => {
+    const calculateMetricsSubset = (subset: any[], isGeneral: boolean, tierMultiplier: number = 1) => {
       const data = {
           general: { premium: 0, commission: 0, count: 0, commPctSum: 0 },
           new: { premium: 0, commission: 0, count: 0, commPctSum: 0 },
@@ -360,7 +365,12 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
       };
       subset.forEach(item => {
           const bonusToSubtract = (!isGeneral && item.hasPortoCard) ? (51 / item.totalInstallments) : 0;
-          const commissionVal = item.monthlyCommission - bonusToSubtract;
+          let commissionVal = item.monthlyCommission - bonusToSubtract;
+          
+          // Aplica o multiplicador do tier se for colaborador
+          if (!isGeneral) {
+              commissionVal *= tierMultiplier;
+          }
 
           data.general.commission += commissionVal;
           if (item.isFirstMonth) {
@@ -387,10 +397,21 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
       return data;
     };
 
-    let worksheets = createWorksheetXML('GERAL', allMonthlyItems, metricsGeneral, true);
+    let worksheets = createWorksheetXML('GERAL', allMonthlyItems, metricsGeneral, true, 1);
+    
     collaborators.forEach(collab => {
       const subset = allMonthlyItems.filter(i => i.collaborator === collab);
-      worksheets += createWorksheetXML(collab, subset, calculateMetricsSubset(subset, false), false);
+      
+      // LOGICA DE ESCALONAMENTO POR VENDAS (itens produzidos no mês selecionado)
+      const salesCount = subset.filter(i => i.isFirstMonth).length;
+      let multiplier = 0.10; // Default 10%
+      if (salesCount >= 11 && salesCount <= 20) {
+          multiplier = 0.15;
+      } else if (salesCount >= 21) {
+          multiplier = 0.20;
+      }
+
+      worksheets += createWorksheetXML(collab, subset, calculateMetricsSubset(subset, false, multiplier), false, multiplier);
     });
 
     const fullXML = xmlHeader + worksheets + '</Workbook>';
