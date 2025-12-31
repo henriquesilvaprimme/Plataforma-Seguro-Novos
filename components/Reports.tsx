@@ -244,6 +244,7 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
  </Styles>`;
 
     const createWorksheetXML = (name: string, items: any[], metrics: any, showDetailed: boolean = false) => {
+      const isGeneral = name === 'GERAL';
       let sheet = `<Worksheet ss:Name="${name.substring(0, 31).replace(/[\[\]\*\?\/\\]/g, '')}">
       <Table ss:ExpandedColumnCount="13">
        <Column ss:Width="40"/>
@@ -323,6 +324,11 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
        </Row>`;
 
       items.forEach(item => {
+        const bonusToSubtract = (!isGeneral && item.hasPortoCard) ? (51 / item.totalInstallments) : 0;
+        const displayMonthlyCommission = item.monthlyCommission - bonusToSubtract;
+        const baseBonus = (!isGeneral || !item.isFirstMonth) ? 0 : (item.hasPortoCard ? 51 : 0);
+        const displayBaseCommissionValue = (item.netPremium * (item.commissionPct / 100)) + (isGeneral && item.hasPortoCard && item.isFirstMonth ? 51 : 0);
+
         sheet += `<Row>
         <Cell ss:StyleID="cellNormal"><Data ss:Type="String">${item.id}</Data></Cell>
         <Cell ss:StyleID="cellNormal"><Data ss:Type="String">${formatDisplayDate(item.startDate)}</Data></Cell>
@@ -331,10 +337,10 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
         <Cell ss:StyleID="cellNormal"><Data ss:Type="String">${item.insurer}</Data></Cell>
         <Cell ss:StyleID="cellNormal"><Data ss:Type="String">${item.isFirstMonth ? formatMoney(item.netPremium) : 'R$ 0,00'}</Data></Cell>
         <Cell ss:StyleID="cellNormal"><Data ss:Type="String">${item.commissionPct.toFixed(2)}%</Data></Cell>
-        <Cell ss:StyleID="cellNormal"><Data ss:Type="String">${formatMoney((item.netPremium * (item.commissionPct / 100)) + (item.hasPortoCard && item.isFirstMonth ? 51 : 0))}</Data></Cell>
+        <Cell ss:StyleID="cellNormal"><Data ss:Type="String">${formatMoney(displayBaseCommissionValue)}</Data></Cell>
         <Cell ss:StyleID="cellNormal"><Data ss:Type="String">${item.paymentMethod}</Data></Cell>
         <Cell ss:StyleID="cellNormal"><Data ss:Type="String">${item.installments}</Data></Cell>
-        <Cell ss:StyleID="cellGreen"><Data ss:Type="String">${formatMoney(item.monthlyCommission)}</Data></Cell>
+        <Cell ss:StyleID="cellGreen"><Data ss:Type="String">${formatMoney(displayMonthlyCommission)}</Data></Cell>
         <Cell ss:StyleID="cellNormal"><Data ss:Type="String">${item.currentInstallment}/${item.totalInstallments}</Data></Cell>
         <Cell ss:StyleID="cellNormal"><Data ss:Type="String">${item.collaborator}</Data></Cell>
        </Row>`;
@@ -346,28 +352,31 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
 
     const collaborators: string[] = Array.from(new Set<string>(allMonthlyItems.map(i => String(i.collaborator)))).sort();
     
-    const calculateMetricsSubset = (subset: any[]) => {
+    const calculateMetricsSubset = (subset: any[], isGeneral: boolean) => {
       const data = {
           general: { premium: 0, commission: 0, count: 0, commPctSum: 0 },
           new: { premium: 0, commission: 0, count: 0, commPctSum: 0 },
           renewal: { premium: 0, commission: 0, count: 0, commPctSum: 0 }
       };
       subset.forEach(item => {
-          data.general.commission += item.monthlyCommission;
+          const bonusToSubtract = (!isGeneral && item.hasPortoCard) ? (51 / item.totalInstallments) : 0;
+          const commissionVal = item.monthlyCommission - bonusToSubtract;
+
+          data.general.commission += commissionVal;
           if (item.isFirstMonth) {
               data.general.premium += item.netPremium || 0;
               data.general.count++;
               data.general.commPctSum += item.commissionPct || 0;
           }
           if (item.subtype === 'Renovação Primme') {
-              data.renewal.commission += item.monthlyCommission;
+              data.renewal.commission += commissionVal;
               if (item.isFirstMonth) {
                   data.renewal.premium += item.netPremium || 0;
                   data.renewal.count++;
                   data.renewal.commPctSum += item.commissionPct || 0;
               }
           } else {
-              data.new.commission += item.monthlyCommission;
+              data.new.commission += commissionVal;
               if (item.isFirstMonth) {
                   data.new.premium += item.netPremium || 0;
                   data.new.count++;
@@ -381,7 +390,7 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
     let worksheets = createWorksheetXML('GERAL', allMonthlyItems, metricsGeneral, true);
     collaborators.forEach(collab => {
       const subset = allMonthlyItems.filter(i => i.collaborator === collab);
-      worksheets += createWorksheetXML(collab, subset, calculateMetricsSubset(subset), false);
+      worksheets += createWorksheetXML(collab, subset, calculateMetricsSubset(subset, false), false);
     });
 
     const fullXML = xmlHeader + worksheets + '</Workbook>';
@@ -448,6 +457,8 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
     });
 
     uniqueLeads.forEach(lead => {
+        // Fix: Removed redundant comparison 'lead.status === LeadStatus.LOST' as it has no overlap with 'LeadStatus.CLOSED'.
+        // Regra Estrita: Exclui leads cancelados (LOST)
         if (lead.status !== LeadStatus.CLOSED || !lead.dealInfo) return;
 
         const name = (lead.name || '').toLowerCase();
@@ -756,7 +767,7 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
        {/* POP-UP PARA ESCOLHER PARCELAMENTO DA COMISSÃO */}
        {isInstallmentModalOpen && selectedLeadForInstallments && (
            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fade-in">
-               <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden flex flex-col border border-gray-200">
+               <div className="bg-white rounded-xl shadow-2xl w-full max-sm overflow-hidden flex flex-col border border-gray-200">
                     <div className="bg-indigo-600 px-6 py-4 flex justify-between items-center text-white">
                         <h2 className="font-bold text-lg flex items-center gap-2">
                             <Calendar className="w-5 h-5" /> Parcelar Comissão
