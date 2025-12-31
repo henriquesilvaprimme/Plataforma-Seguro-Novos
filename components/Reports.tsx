@@ -404,10 +404,10 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
       
       // LOGICA DE ESCALONAMENTO POR VENDAS (itens produzidos no mês selecionado)
       const salesCount = subset.filter(i => i.isFirstMonth).length;
-      let multiplier = 0.10; // Default 10%
-      if (salesCount >= 11 && salesCount <= 20) {
+      let multiplier = 0.10; // 1 a 20 vendas (Padrão)
+      if (salesCount >= 21 && salesCount <= 30) {
           multiplier = 0.15;
-      } else if (salesCount >= 21) {
+      } else if (salesCount >= 31) {
           multiplier = 0.20;
       }
 
