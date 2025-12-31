@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { Dashboard } from './components/Dashboard';
@@ -56,7 +55,8 @@ export default function App() {
     const unsubscribeLeads = subscribeToCollection('leads', (data) => setLeadsCollection(data as Lead[]));
     const unsubscribeRenewals = subscribeToCollection('renovacoes', (data) => setRenewalsCollection(data as Lead[]));
     const unsubscribeRenewed = subscribeToCollection('renovados', (data) => {
-        const fixedData = data.map(d => ({ ...d, status: LeadStatus.CLOSED }));
+        // Correção: Mantém o status original se for LOST, caso contrário garante CLOSED (retrocompatibilidade)
+        const fixedData = data.map(d => ({ ...d, status: d.status === LeadStatus.LOST ? LeadStatus.LOST : LeadStatus.CLOSED }));
         setRenewedCollection(fixedData as Lead[]);
     });
     const unsubscribeUsers = subscribeToCollection('usuarios', (data) => setUsersCollection(data as User[]));
@@ -85,26 +85,56 @@ export default function App() {
   };
 
   const handleUpdateLead = (updatedLead: Lead) => {
+      let targetCollection = '';
       if (currentPath.includes('leads')) {
-          updateDataInCollection('leads', updatedLead.id, updatedLead);
+          targetCollection = 'leads';
       } else if (currentPath.includes('renovacoes') || currentPath.includes('renovacoes-perdidas') || currentPath.includes('segurados')) {
-          updateDataInCollection('renovacoes', updatedLead.id, updatedLead);
+          targetCollection = 'renovacoes';
       } else if (currentPath.includes('renovados')) {
-          updateDataInCollection('renovados', updatedLead.id, updatedLead);
+          targetCollection = 'renovados';
       } else if (currentPath.includes('relatorios')) {
-          // No relatório, verificamos em qual coleção o lead originalmente reside
-          if (leadsCollection.find(l => l.id === updatedLead.id)) updateDataInCollection('leads', updatedLead.id, updatedLead);
-          else if (renewedCollection.find(l => l.id === updatedLead.id)) updateDataInCollection('renovados', updatedLead.id, updatedLead);
-          else if (renewalsCollection.find(l => l.id === updatedLead.id)) updateDataInCollection('renovacoes', updatedLead.id, updatedLead);
+          if (leadsCollection.find(l => l.id === updatedLead.id)) targetCollection = 'leads';
+          else if (renewedCollection.find(l => l.id === updatedLead.id)) targetCollection = 'renovados';
+          else if (renewalsCollection.find(l => l.id === updatedLead.id)) targetCollection = 'renovacoes';
       } else {
-          if (leadsCollection.find(l => l.id === updatedLead.id)) updateDataInCollection('leads', updatedLead.id, updatedLead);
-          else if (renewalsCollection.find(l => l.id === updatedLead.id)) updateDataInCollection('renovacoes', updatedLead.id, updatedLead);
-          else if (renewedCollection.find(l => l.id === updatedLead.id)) updateDataInCollection('renovados', updatedLead.id, updatedLead);
+          if (leadsCollection.find(l => l.id === updatedLead.id)) targetCollection = 'leads';
+          else if (renewalsCollection.find(l => l.id === updatedLead.id)) targetCollection = 'renovacoes';
+          else if (renewedCollection.find(l => l.id === updatedLead.id)) targetCollection = 'renovados';
+      }
+
+      if (targetCollection) {
+          updateDataInCollection(targetCollection, updatedLead.id, updatedLead);
+
+          // LOGICA DE CANCELAMENTO / RETORNO AO STATUS NOVO
+          // Se estamos cancelando um lead na aba Segurados (renovacoes)
+          if (targetCollection === 'renovacoes' && updatedLead.status === LeadStatus.LOST) {
+              // Buscar o "gêmeo" na aba Meus Leads (leads)
+              const twinInLeads = leadsCollection.find(l => 
+                  l.name.toLowerCase().trim() === updatedLead.name.toLowerCase().trim() && 
+                  l.phone.replace(/\D/g, '') === updatedLead.phone.replace(/\D/g, '')
+              );
+
+              if (twinInLeads) {
+                  // Reseta o lead em Meus Leads para o status original/novo
+                  const resetTwin = {
+                      ...twinInLeads,
+                      status: LeadStatus.NEW,
+                      dealInfo: undefined,
+                      closedAt: undefined,
+                      commissionPaid: false,
+                      commissionCP: false,
+                      commissionInstallmentPlan: false,
+                      commissionCustomInstallments: 0
+                  };
+                  updateDataInCollection('leads', twinInLeads.id, resetTwin);
+              }
+          }
       }
   };
 
   const handleUpdateUser = (updatedUser: User) => updateDataInCollection('usuarios', updatedUser.id, updatedUser);
   const handleAddUser = (newUser: User) => addDataToCollection('usuarios', newUser);
+  const handleAddLeadToCollection = (coll: string, lead: Lead) => addDataToCollection(coll, lead);
   const handleUpdateRenovationsTotal = (val: number) => updateTotalRenovacoes(val);
 
   const allLeadsForRanking = [...leadsCollection, ...renewalsCollection, ...renewedCollection];
