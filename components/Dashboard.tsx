@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import { Lead, LeadStatus, User } from '../types';
@@ -27,6 +26,7 @@ interface Metrics {
   othersCount: number;
   totalPremium: number;
   avgCommission: number;
+  avgTicket: number;
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({ newLeadsData, renewalLeadsData, manualRenewalTotal, onUpdateRenewalTotal, currentUser }) => {
@@ -163,6 +163,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ newLeadsData, renewalLeads
     });
 
     const avgCommission = sales > 0 ? totalCommission / sales : 0;
+    const avgTicket = sales > 0 ? totalPremium / sales : 0;
 
     return {
         total,
@@ -176,7 +177,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ newLeadsData, renewalLeads
         itauCount,
         othersCount,
         totalPremium,
-        avgCommission
+        avgCommission,
+        avgTicket
     };
   };
 
@@ -456,7 +458,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ newLeadsData, renewalLeads
             <DollarSign className="w-4 h-4 text-gray-400" />
             Financeiro
         </h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div className="bg-white p-3 rounded-lg shadow-sm border border-gray-100 flex items-center gap-3">
                 <div className="p-2 bg-green-100 text-green-600 rounded-full">
                     <DollarSign className="w-5 h-5" />
@@ -465,6 +467,18 @@ export const Dashboard: React.FC<DashboardProps> = ({ newLeadsData, renewalLeads
                     <p className="text-[10px] text-gray-500 font-bold uppercase mb-0.5">Prêmio Líquido</p>
                     <p className="text-lg font-extrabold text-gray-900">
                         {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(metrics.totalPremium)}
+                    </p>
+                </div>
+            </div>
+
+            <div className="bg-white p-3 rounded-lg shadow-sm border border-gray-100 flex items-center gap-3">
+                <div className="p-2 bg-blue-100 text-blue-600 rounded-full">
+                    <DollarSign className="w-5 h-5" />
+                </div>
+                <div>
+                    <p className="text-[10px] text-gray-500 font-bold uppercase mb-0.5">Ticket Médio</p>
+                    <p className="text-lg font-extrabold text-gray-900">
+                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(metrics.avgTicket)}
                     </p>
                 </div>
             </div>
