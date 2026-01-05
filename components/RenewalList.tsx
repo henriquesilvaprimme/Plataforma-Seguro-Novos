@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Lead, LeadStatus, User, DealInfo } from '../types';
 import { Car, Phone, Calendar, DollarSign, Percent, CreditCard, Users, RefreshCw, Bell, Search, Shield, AlertTriangle, Edit, Check, Plus } from './Icons';
@@ -176,6 +175,7 @@ const RenewalCard: React.FC<{ lead: Lead, users: User[], onUpdate: (l: Lead) => 
             ...lead,
             name: dealForm.leadName,
             status: LeadStatus.NEW,
+            insuranceType: 'Renovação Primme', // Garante a manutenção do tipo para a próxima renovação
             assignedTo: '',
             dealInfo: {
                 insurer: dealForm.insurer,
@@ -720,7 +720,7 @@ export const RenewalList: React.FC<RenewalListProps> = ({ leads, users, onUpdate
            vehicleModel: newRenewalForm.vehicleModel,
            vehicleYear: newRenewalForm.vehicleYear,
            city: newRenewalForm.city,
-           insuranceType: 'Renovação', 
+           insuranceType: 'Renovação Primme', // Alterado para Renovação Primme conforme solicitado
            status: LeadStatus.NEW,
            createdAt: new Date().toISOString(),
            assignedTo: newRenewalForm.assignedTo,
