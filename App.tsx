@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { Dashboard } from './components/Dashboard';
 import { LeadList } from './components/LeadList';
@@ -27,11 +27,16 @@ export default function App() {
   const currentPath = location.pathname;
   
   // COLEÇÕES DO FIREBASE
-  const [leadsCollection, setLeadsCollection] = useState<Lead[]>([]); 
-  const [renewalsCollection, setRenewalsCollection] = useState<Lead[]>([]); 
-  const [renewedCollection, setRenewedCollection] = useState<Lead[]>([]); 
+  const [leadsCollectionRaw, setLeadsCollectionRaw] = useState<Lead[]>([]); 
+  const [renewalsCollectionRaw, setRenewalsCollectionRaw] = useState<Lead[]>([]); 
+  const [renewedCollectionRaw, setRenewedCollectionRaw] = useState<Lead[]>([]); 
   const [usersCollection, setUsersCollection] = useState<User[]>([]); 
   
+  // FILTRAGEM DE DESCARTADOS (Importante para não poluir dashboard nem listas)
+  const leadsCollection = useMemo(() => leadsCollectionRaw.filter(l => !l.isDiscarded), [leadsCollectionRaw]);
+  const renewalsCollection = useMemo(() => renewalsCollectionRaw.filter(l => !l.isDiscarded), [renewalsCollectionRaw]);
+  const renewedCollection = useMemo(() => renewedCollectionRaw.filter(l => !l.isDiscarded), [renewedCollectionRaw]);
+
   // STATS
   const [manualRenewalTotal, setManualRenewalTotal] = useState<number>(0);
 
@@ -52,12 +57,12 @@ export default function App() {
 
   // === FIREBASE SUBSCRIPTIONS ===
   useEffect(() => {
-    const unsubscribeLeads = subscribeToCollection('leads', (data) => setLeadsCollection(data as Lead[]));
-    const unsubscribeRenewals = subscribeToCollection('renovacoes', (data) => setRenewalsCollection(data as Lead[]));
+    const unsubscribeLeads = subscribeToCollection('leads', (data) => setLeadsCollectionRaw(data as Lead[]));
+    const unsubscribeRenewals = subscribeToCollection('renovacoes', (data) => setRenewalsCollectionRaw(data as Lead[]));
     const unsubscribeRenewed = subscribeToCollection('renovados', (data) => {
         // Correção: Mantém o status original se for LOST, caso contrário garante CLOSED (retrocompatibilidade)
         const fixedData = data.map(d => ({ ...d, status: d.status === LeadStatus.LOST ? LeadStatus.LOST : LeadStatus.CLOSED }));
-        setRenewedCollection(fixedData as Lead[]);
+        setRenewedCollectionRaw(fixedData as Lead[]);
     });
     const unsubscribeUsers = subscribeToCollection('usuarios', (data) => setUsersCollection(data as User[]));
     const unsubscribeTotal = subscribeToRenovationsTotal((total) => setManualRenewalTotal(total));
@@ -70,6 +75,18 @@ export default function App() {
         unsubscribeTotal();
     };
   }, []);
+
+  // Lógica para identificar telefones que já tiveram vendas fechadas
+  const closedPhones = useMemo(() => {
+    const allLeads = [...leadsCollectionRaw, ...renewalsCollectionRaw, ...renewedCollectionRaw];
+    const phones = new Set<string>();
+    allLeads.forEach(l => {
+      if (l.status === LeadStatus.CLOSED && l.phone) {
+        phones.add(l.phone.replace(/\D/g, ''));
+      }
+    });
+    return phones;
+  }, [leadsCollectionRaw, renewalsCollectionRaw, renewedCollectionRaw]);
 
   // === HANDLERS ===
   const handleAddLead = (newLead: Lead) => {
@@ -93,13 +110,13 @@ export default function App() {
       } else if (currentPath.includes('renovados')) {
           targetCollection = 'renovados';
       } else if (currentPath.includes('relatorios')) {
-          if (leadsCollection.find(l => l.id === updatedLead.id)) targetCollection = 'leads';
-          else if (renewedCollection.find(l => l.id === updatedLead.id)) targetCollection = 'renovados';
-          else if (renewalsCollection.find(l => l.id === updatedLead.id)) targetCollection = 'renovacoes';
+          if (leadsCollectionRaw.find(l => l.id === updatedLead.id)) targetCollection = 'leads';
+          else if (renewedCollectionRaw.find(l => l.id === updatedLead.id)) targetCollection = 'renovados';
+          else if (renewalsCollectionRaw.find(l => l.id === updatedLead.id)) targetCollection = 'renovacoes';
       } else {
-          if (leadsCollection.find(l => l.id === updatedLead.id)) targetCollection = 'leads';
-          else if (renewalsCollection.find(l => l.id === updatedLead.id)) targetCollection = 'renovacoes';
-          else if (renewedCollection.find(l => l.id === updatedLead.id)) targetCollection = 'renovados';
+          if (leadsCollectionRaw.find(l => l.id === updatedLead.id)) targetCollection = 'leads';
+          else if (renewalsCollectionRaw.find(l => l.id === updatedLead.id)) targetCollection = 'renovacoes';
+          else if (renewedCollectionRaw.find(l => l.id === updatedLead.id)) targetCollection = 'renovados';
       }
 
       if (targetCollection) {
@@ -109,7 +126,7 @@ export default function App() {
           // Se estamos cancelando um lead na aba Segurados (renovacoes)
           if (targetCollection === 'renovacoes' && updatedLead.status === LeadStatus.LOST) {
               // Buscar o "gêmeo" na aba Meus Leads (leads)
-              const twinInLeads = leadsCollection.find(l => 
+              const twinInLeads = leadsCollectionRaw.find(l => 
                   l.name.toLowerCase().trim() === updatedLead.name.toLowerCase().trim() && 
                   l.phone.replace(/\D/g, '') === updatedLead.phone.replace(/\D/g, '')
               );
@@ -340,6 +357,7 @@ export default function App() {
                                 onUpdateLead={handleUpdateLead}
                                 onAddLead={handleAddLead}
                                 currentUser={currentUser}
+                                closedPhones={closedPhones}
                             />
                         </div>
                     ) : <Navigate to="/dashboard" />
