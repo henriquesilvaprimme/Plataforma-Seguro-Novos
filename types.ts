@@ -72,6 +72,9 @@ export interface Lead {
   aiScore?: number;
   aiAnalysis?: string;
   aiActionPlan?: string[];
+
+  // Controle de Descarte
+  isDiscarded?: boolean;
 }
 
 export interface User {
