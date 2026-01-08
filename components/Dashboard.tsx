@@ -101,8 +101,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ newLeadsData, renewalLeads
   // basta contar quantos CLOSED existem no array filtrado.
   const renewalSalesSpecificCount = filteredRenewalLeads.filter(l => l.status === LeadStatus.CLOSED).length;
 
-  // Calculation of Total Potential Premium for Renewals
-  const totalRenewalPotential = filteredRenewalLeads.reduce((acc, lead) => acc + (lead.dealInfo?.netPremium || 0), 0);
+  // Calculation of Total Potential Premium for Renewals 
+  // Agora priorizando o campo previousNetPremium (Prêmio Liquido Anterior) conforme solicitado
+  const totalRenewalPotential = filteredRenewalLeads.reduce((acc, lead) => {
+      const valueToUse = lead.dealInfo?.previousNetPremium || lead.dealInfo?.netPremium || 0;
+      return acc + (valueToUse * 1.0738);
+  }, 0);
 
   const calculateMetrics = (subset: Lead[], isRenewalSection: boolean): Metrics => {
     // Total agora é baseado na contagem filtrada
