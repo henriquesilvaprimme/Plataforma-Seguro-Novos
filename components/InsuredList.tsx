@@ -185,7 +185,9 @@ const VehicleCard: React.FC<{ lead: Lead; onUpdate: (l: Lead) => void }> = ({ le
                  </p>
                  <div className="flex justify-between items-center text-xs">
                     <span className="text-gray-600">Prêmio:</span>
-                    <span className="font-bold text-gray-900">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(lead.dealInfo?.netPremium || 0)}</span>
+                    <span className="font-bold text-gray-900">
+                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(((lead.dealInfo?.newNetPremium || lead.dealInfo?.netPremium || 0) * 1.0738))}
+                    </span>
                  </div>
                  <div className="flex justify-between items-center text-xs">
                     <span className="text-gray-600">Comissão:</span>
