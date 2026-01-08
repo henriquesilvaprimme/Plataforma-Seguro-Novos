@@ -11,6 +11,8 @@ export interface DealInfo {
   insurer: string;
   paymentMethod: string;
   netPremium: number;
+  previousNetPremium?: number; // Prêmio do ano anterior
+  newNetPremium?: number;      // Prêmio da renovação atual
   commission: number;
   installments: string;
   startDate: string;
