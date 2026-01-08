@@ -126,8 +126,11 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
             const monthDiff = (filterYear - startYear) * 12 + (filterMonth - startMonth);
             const isFirstMonth = monthDiff === 0;
 
+            // Puxa o Premio Liquido Novo conforme solicitado
+            const currentPremium = lead.dealInfo.newNetPremium || lead.dealInfo.netPremium || 0;
+
             const { finalValue, pendingValue, installmentsCount } = calculateCommissionRules(
-                lead.dealInfo.netPremium, 
+                currentPremium, 
                 lead.dealInfo.commission, 
                 lead.dealInfo.paymentMethod, 
                 lead.dealInfo.installments,
@@ -145,7 +148,7 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
                      subtype: lead.insuranceType || 'Novo',
                      leadName: lead.name,
                      insurer: lead.dealInfo.insurer,
-                     netPremium: lead.dealInfo.netPremium,
+                     netPremium: currentPremium,
                      commissionPct: lead.dealInfo.commission,
                      installments: lead.dealInfo.installments,
                      paymentMethod: lead.dealInfo.paymentMethod,
@@ -504,10 +507,13 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
         // Se monthDiff < 0, significa que o seguro ainda nem começou, não aparece em Seguros Pagos.
         if (monthDiff < 0) return;
 
+        // Puxa o Premio Liquido Novo conforme solicitado
+        const currentPremium = lead.dealInfo.newNetPremium || lead.dealInfo.netPremium || 0;
+
         // Regra 1: No mês da Vigência (Month 0) - Mostra tudo
         if (monthDiff === 0) {
             const { finalValue, pendingValue } = calculateCommissionRules(
-                lead.dealInfo.netPremium, lead.dealInfo.commission, lead.dealInfo.paymentMethod, lead.dealInfo.installments,
+                currentPremium, lead.dealInfo.commission, lead.dealInfo.paymentMethod, lead.dealInfo.installments,
                 lead.commissionPaid, lead.cartaoPortoNovo, lead.commissionInstallmentPlan ? lead.commissionCustomInstallments : undefined,
                 lead.commissionCP, true
             );
@@ -527,7 +533,7 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
             // Caso A: Sem nenhum status (Pendente Total)
             if (!isInstallment) {
                  const { finalValue, pendingValue } = calculateCommissionRules(
-                    lead.dealInfo.netPremium, lead.dealInfo.commission, lead.dealInfo.paymentMethod, lead.dealInfo.installments,
+                    currentPremium, lead.dealInfo.commission, lead.dealInfo.paymentMethod, lead.dealInfo.installments,
                     false, lead.cartaoPortoNovo, undefined, lead.commissionCP, false
                  );
                  result.push({
@@ -541,7 +547,7 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
             // Caso B: Parcelado (Mostra progresso e apenas botão Paga)
             else if (isInstallment && monthDiff < installmentsCount) {
                 const { finalValue, pendingValue } = calculateCommissionRules(
-                    lead.dealInfo.netPremium, lead.dealInfo.commission, lead.dealInfo.paymentMethod, lead.dealInfo.installments,
+                    currentPremium, lead.dealInfo.commission, lead.dealInfo.paymentMethod, lead.dealInfo.installments,
                     false, lead.cartaoPortoNovo, installmentsCount, lead.commissionCP, false
                 );
                 // No Parcelado, conforme regra, somamos apenas a parcela como pendente
@@ -741,7 +747,7 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
                                             <td className="px-4 py-3 text-xs font-bold text-gray-600 whitespace-nowrap">{formatDisplayDate(item.dealInfo?.startDate)}</td>
                                             <td className="px-4 py-3 text-xs font-bold text-gray-900">{item.name}</td>
                                             <td className="px-4 py-3 text-xs text-gray-700">{item.dealInfo?.insurer}</td>
-                                            <td className="px-4 py-3 text-xs font-bold text-gray-900">{item.displayType === 'CP_ONLY' ? 'R$ 0,00' : formatMoney(item.dealInfo?.netPremium || 0)}</td>
+                                            <td className="px-4 py-3 text-xs font-bold text-gray-900">{item.displayType === 'CP_ONLY' ? 'R$ 0,00' : formatMoney(item.dealInfo?.newNetPremium || item.dealInfo?.netPremium || 0)}</td>
                                             <td className="px-4 py-3 text-xs font-bold text-indigo-600 text-center">{item.displayType === 'CP_ONLY' ? '-' : `${item.dealInfo?.commission}%`}</td>
                                             <td className="px-4 py-3 text-xs font-bold text-green-700 bg-green-50/50">{formatMoney(item.commissionValue || 0)}</td>
                                             <td className="px-4 py-3">
