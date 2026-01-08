@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Lead, LeadStatus, User } from '../types';
 import { Car, Phone, Calendar, DollarSign, Percent, CreditCard, Users, CheckCircle, Bell, Search, Shield } from './Icons';
@@ -123,7 +122,7 @@ const RenewedCard: React.FC<{ lead: Lead, onUpdate: (l: Lead) => void }> = ({ le
                             <DollarSign className="w-3 h-3 text-gray-400 shrink-0" />
                             <span className="text-gray-700 font-medium">Prêmio: 
                                 <span className="text-gray-900 ml-1">
-                                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(lead.dealInfo?.netPremium || 0)}
+                                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(((lead.dealInfo?.newNetPremium || lead.dealInfo?.netPremium || 0) * 1.0738))}
                                 </span>
                             </span>
                         </div>
