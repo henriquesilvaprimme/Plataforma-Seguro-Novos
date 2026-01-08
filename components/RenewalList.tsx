@@ -162,6 +162,8 @@ const RenewalCard: React.FC<{ lead: Lead, users: User[], onUpdate: (l: Lead) => 
                 insurer: dealForm.insurer,
                 paymentMethod: dealForm.paymentMethod,
                 netPremium: dealForm.netPremium,
+                previousNetPremium: lead.dealInfo?.netPremium || 0, // O que era atual vira anterior
+                newNetPremium: dealForm.netPremium,                 // O que está fechando agora vira o novo
                 commission: dealForm.commission,
                 installments: dealForm.installments,
                 startDate: dealForm.startDate,
@@ -181,6 +183,8 @@ const RenewalCard: React.FC<{ lead: Lead, users: User[], onUpdate: (l: Lead) => 
                 insurer: dealForm.insurer,
                 paymentMethod: dealForm.paymentMethod,
                 netPremium: dealForm.netPremium,
+                previousNetPremium: lead.dealInfo?.netPremium || 0, // Atualiza para o próximo ciclo
+                newNetPremium: dealForm.netPremium,
                 commission: dealForm.commission,
                 installments: dealForm.installments,
                 startDate: dealForm.startDate,
@@ -609,7 +613,7 @@ const RenewalCard: React.FC<{ lead: Lead, users: User[], onUpdate: (l: Lead) => 
                             <select
                                 value={dealForm.installments}
                                 onChange={(e) => setDealForm({...dealForm, installments: e.target.value})}
-                                className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-green-500 outline-none bg-white"
+                                className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
                             >
                                 <option value="">Selecione</option>
                                 {Array.from({ length: 12 }, (_, i) => i + 1).map(num => (
@@ -729,6 +733,8 @@ export const RenewalList: React.FC<RenewalListProps> = ({ leads, users, onUpdate
                insurer: newRenewalForm.insurer,
                paymentMethod: newRenewalForm.paymentMethod,
                netPremium: newRenewalForm.netPremium,
+               previousNetPremium: newRenewalForm.netPremium, // No manual, inicializa com o mesmo valor
+               newNetPremium: newRenewalForm.netPremium,
                commission: newRenewalForm.commission,
                installments: newRenewalForm.installments,
                startDate: newRenewalForm.startDate,
