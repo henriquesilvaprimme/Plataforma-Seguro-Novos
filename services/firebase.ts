@@ -117,6 +117,8 @@ export const mapDocumentToLead = (doc: any): Lead => {
         dealInfo: (data.Seguradora || data.PremioLiquido || data.VigenciaInicial) ? {
             insurer: data.Seguradora || '',
             netPremium: parseCurrency(data.PremioLiquido),
+            previousNetPremium: parseCurrency(data['Premio Liquido Anterior']),
+            newNetPremium: parseCurrency(data['Premio Liquido Novo']),
             commission: parsePercentage(data.Comissao),
             installments: data.Parcelamento || '',
             startDate: parseDateToISO(data.VigenciaInicial),
@@ -193,6 +195,8 @@ const mapAppToDb = (collectionName: string, data: any) => {
     if (data.dealInfo) {
         dbLead.Seguradora = data.dealInfo.insurer || '';
         dbLead.PremioLiquido = data.dealInfo.netPremium || 0;
+        dbLead['Premio Liquido Anterior'] = data.dealInfo.previousNetPremium || 0;
+        dbLead['Premio Liquido Novo'] = data.dealInfo.newNetPremium || 0;
         dbLead.Parcelamento = data.dealInfo.installments || '';
         dbLead.Comissao = data.dealInfo.commission || 0;
         dbLead.VigenciaInicial = data.dealInfo.startDate || '';
