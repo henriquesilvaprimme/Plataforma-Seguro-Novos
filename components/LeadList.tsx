@@ -724,7 +724,14 @@ export const LeadList: React.FC<LeadListProps> = ({ leads, users, onSelectLead, 
     const name = lead.name || '';
     const phone = lead.phone || '';
     const matchesSearch = name.toLowerCase().includes(term) || phone.includes(term); 
-    const matchesStatus = filterStatus === 'all' || lead.status === filterStatus;
+    
+    // Lógica atualizada para incluir filtro de 'Sem atribuição'
+    const matchesStatus = filterStatus === 'all' 
+      ? true 
+      : filterStatus === 'unassigned'
+        ? (!lead.assignedTo || lead.assignedTo.trim() === '')
+        : lead.status === filterStatus;
+
     let matchesDate = true;
     if (filterDate && lead.createdAt) {
         if(lead.createdAt.includes('-') && !lead.createdAt.includes('/')) {
@@ -812,6 +819,7 @@ export const LeadList: React.FC<LeadListProps> = ({ leads, users, onSelectLead, 
             onChange={(e) => setFilterStatus(e.target.value)}
           >
             <option value="all">Todos Status</option>
+            <option value="unassigned">Sem atribuição</option>
             {Object.values(LeadStatus).map(status => (
                 <option key={status} value={status}>{status}</option>
             ))}
