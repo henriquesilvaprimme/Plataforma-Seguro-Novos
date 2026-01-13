@@ -113,6 +113,9 @@ export const mapDocumentToLead = (doc: any): Lead => {
         commissionCP: data.commissionCP || false,
         commissionInstallmentPlan: data.commissionInstallmentPlan || false,
         commissionCustomInstallments: data.commissionCustomInstallments || 0,
+        commissionCPG: data.commissionCPG || false,
+        commissionCPGType: data.commissionCPGType,
+        commissionCPGInstallments: data.commissionCPGInstallments,
         isDiscarded: data.isDiscarded || false,
         dealInfo: (data.Seguradora || data.PremioLiquido || data.VigenciaInicial) ? {
             insurer: data.Seguradora || '',
@@ -189,6 +192,9 @@ const mapAppToDb = (collectionName: string, data: any) => {
         commissionCP: data.commissionCP || false,
         commissionInstallmentPlan: data.commissionInstallmentPlan || false,
         commissionCustomInstallments: data.commissionCustomInstallments || 0,
+        commissionCPG: data.commissionCPG || false,
+        commissionCPGType: data.commissionCPGType || null,
+        commissionCPGInstallments: data.commissionCPGInstallments || 0,
         isDiscarded: data.isDiscarded || false
     };
 
