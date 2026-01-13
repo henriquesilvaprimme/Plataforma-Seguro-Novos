@@ -63,6 +63,11 @@ export interface Lead {
   commissionCP?: boolean;
   commissionInstallmentPlan?: boolean; // Novo: Define se segue a regra de parcelamento
   commissionCustomInstallments?: number; // Novo: Número de parcelas definido manualmente
+  
+  // Controle CPG (Comissão Paga ao Gerente/Consultor)
+  commissionCPG?: boolean;
+  commissionCPGType?: 'A_VISTA' | 'PARCELADO';
+  commissionCPGInstallments?: number;
 
   // Dados do Fechamento (Novo)
   dealInfo?: DealInfo;
