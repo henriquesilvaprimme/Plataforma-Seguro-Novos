@@ -132,6 +132,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ newLeadsData, renewalLeads
              total = manualRenewalTotal;
         }
         sales = renewalSalesSpecificCount;
+    } else {
+        // AJUSTE SOLICITADO: Seguro Novo computa vendas por closedAt dentro do filtro de data
+        sales = newLeadsData
+            .filter(userFilter)
+            .filter(l => l.status === LeadStatus.CLOSED && l.closedAt && l.closedAt.startsWith(filterDate))
+            .length;
     }
     
     const lost = subset.filter(l => l.status === LeadStatus.LOST).length;
@@ -148,9 +154,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ newLeadsData, renewalLeads
     let itauCount = 0;
     let othersCount = 0;
 
-    // Para calcular os financeiros e contadores de seguradora, usamos os leads fechados do subset
-    // O subset aqui INCLUI Indicação, então eles serão somados no financeiro.
-    const leadsForStats = subset.filter(l => l.status === LeadStatus.CLOSED);
+    // Para calcular os financeiros e contadores de seguradora, usamos os leads fechados
+    // Se for Seguro Novo, buscamos pelo closedAt conforme regra de vendas ajustada
+    let leadsForStats = subset.filter(l => l.status === LeadStatus.CLOSED);
+
+    if (!isRenewalSection) {
+        leadsForStats = newLeadsData
+            .filter(userFilter)
+            .filter(l => l.status === LeadStatus.CLOSED && l.closedAt && l.closedAt.startsWith(filterDate));
+    }
 
     leadsForStats.forEach(lead => {
         if (lead.dealInfo) {
