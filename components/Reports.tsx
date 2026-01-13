@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Lead, LeadStatus } from '../types';
-import { FileBarChart2, DollarSign, Shield, Calendar, Search, CheckCircle, ChevronLeft, ChevronRight, Percent, Plus, Download } from './Icons';
+import { FileBarChart2, DollarSign, Shield, Calendar, Search, CheckCircle, ChevronLeft, ChevronRight, Percent, Plus, Download, UserCheck } from './Icons';
 
 interface ReportsProps {
   leads: Lead[];
@@ -21,6 +21,12 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
   const [isInstallmentModalOpen, setIsInstallmentModalOpen] = useState(false);
   const [selectedLeadForInstallments, setSelectedLeadForInstallments] = useState<Lead | null>(null);
   const [customInstallmentValue, setCustomInstallmentValue] = useState(1);
+
+  // Estados para o Modal CPG
+  const [isCPGModalOpen, setIsCPGModalOpen] = useState(false);
+  const [selectedLeadForCPG, setSelectedLeadForCPG] = useState<Lead | null>(null);
+  const [cpgType, setCpgType] = useState<'A_VISTA' | 'PARCELADO'>('A_VISTA');
+  const [cpgInstallments, setCpgInstallments] = useState(1);
 
   const formatDisplayDate = (dateString?: string) => {
     if (!dateString) return '-';
@@ -159,7 +165,12 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
                      totalInstallments: installmentsCount,
                      monthlyCommission: finalValue,
                      pendingCommission: pendingValue,
-                     hasPortoCard: !!lead.cartaoPortoNovo
+                     hasPortoCard: !!lead.cartaoPortoNovo,
+                     // Dados CPG
+                     commissionCPG: lead.commissionCPG,
+                     commissionCPGType: lead.commissionCPGType,
+                     commissionCPGInstallments: lead.commissionCPGInstallments,
+                     monthDiff: monthDiff
                  });
             }
         }
@@ -403,7 +414,17 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
     let worksheets = createWorksheetXML('GERAL', allMonthlyItems, metricsGeneral, true, 1);
     
     collaborators.forEach(collab => {
-      const subset = allMonthlyItems.filter(i => i.collaborator === collab);
+      // Filtragem CPG: Exclui da aba do usuário se CPG estiver ativo e atingir as condições
+      const subset = allMonthlyItems.filter(i => {
+          if (i.collaborator !== collab) return false;
+          
+          if (i.commissionCPG) {
+              if (i.commissionCPGType === 'A_VISTA') return false;
+              if (i.commissionCPGType === 'PARCELADO' && i.monthDiff >= (i.commissionCPGInstallments || 1)) return false;
+          }
+          
+          return true;
+      });
       
       // LOGICA DE ESCALONAMENTO POR VENDAS (itens produzidos no mês selecionado)
       const salesCount = subset.filter(i => i.isFirstMonth).length;
@@ -432,6 +453,15 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
   const toggleCheck = (lead: Lead, field: keyof Lead) => {
       if (!onUpdateLead) return;
       
+      // Caso CPG
+      if (field === 'commissionCPG') {
+          setSelectedLeadForCPG(lead);
+          setCpgType('A_VISTA');
+          setCpgInstallments(1);
+          setIsCPGModalOpen(true);
+          return;
+      }
+
       // Se estiver clicando em PARCELADO e ele estiver FALSO, abre o modal
       if (field === 'commissionInstallmentPlan' && !lead.commissionInstallmentPlan) {
           setSelectedLeadForInstallments(lead);
@@ -466,6 +496,20 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
       setSelectedLeadForInstallments(null);
   };
 
+  const handleConfirmCPG = () => {
+      if (!selectedLeadForCPG || !onUpdateLead) return;
+
+      onUpdateLead({
+          ...selectedLeadForCPG,
+          commissionCPG: true,
+          commissionCPGType: cpgType,
+          commissionCPGInstallments: cpgType === 'PARCELADO' ? cpgInstallments : 0
+      });
+
+      setIsCPGModalOpen(false);
+      setSelectedLeadForCPG(null);
+  };
+
   const paidItems = useMemo(() => {
     const allItems = [...leads, ...renewed, ...renewals]; 
     const term = searchTermPaid.toLowerCase();
@@ -481,7 +525,6 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
     });
 
     uniqueLeads.forEach(lead => {
-        // Fix: Removed redundant comparison 'lead.status === LeadStatus.LOST' as it has no overlap with 'LeadStatus.CLOSED'.
         // Regra Estrita: Exclui leads cancelados (LOST)
         if (lead.status !== LeadStatus.CLOSED || !lead.dealInfo) return;
 
@@ -776,6 +819,10 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
                                                                 <DollarSign className="w-3 h-3" /> CP
                                                         </button>
                                                     )}
+
+                                                    <button onClick={() => toggleCheck(item, 'commissionCPG')} className={`flex items-center gap-1 px-2 py-1 rounded border text-[10px] font-bold transition-all ${item.commissionCPG ? 'bg-purple-600 text-white border-purple-700' : 'bg-gray-100 text-gray-400 border-gray-200 hover:border-purple-500 hover:text-purple-600'}`}>
+                                                        <UserCheck className="w-3 h-3" /> CPG {item.commissionCPG ? (item.commissionCPGType === 'PARCELADO' ? `(${item.commissionCPGInstallments}x)` : '(V)') : ''}
+                                                    </button>
                                                 </div>
                                             </td>
                                         </tr>
@@ -835,6 +882,76 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
                             className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 font-bold text-sm shadow-md transition-all"
                         >
                             Confirmar
+                        </button>
+                    </div>
+               </div>
+           </div>
+       )}
+
+       {/* POP-UP CPG */}
+       {isCPGModalOpen && selectedLeadForCPG && (
+           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fade-in">
+               <div className="bg-white rounded-xl shadow-2xl w-full max-sm overflow-hidden flex flex-col border border-gray-200">
+                    <div className="bg-purple-600 px-6 py-4 flex justify-between items-center text-white">
+                        <h2 className="font-bold text-lg flex items-center gap-2">
+                            <UserCheck className="w-5 h-5" /> Registrar CPG
+                        </h2>
+                        <button onClick={() => setIsCPGModalOpen(false)} className="hover:text-gray-200 transition-colors">✕</button>
+                    </div>
+                    <div className="p-6 space-y-4">
+                        <p className="text-sm text-gray-600">
+                            Como a comissão foi paga ao consultor do cliente <b>{selectedLeadForCPG.name}</b>?
+                        </p>
+                        <div className="flex gap-4">
+                            <button 
+                                onClick={() => setCpgType('A_VISTA')}
+                                className={`flex-1 py-3 rounded-lg border font-bold text-sm transition-all ${cpgType === 'A_VISTA' ? 'bg-purple-100 border-purple-500 text-purple-700 shadow-sm' : 'bg-white border-gray-200 text-gray-500'}`}
+                            >
+                                À Vista
+                            </button>
+                            <button 
+                                onClick={() => setCpgType('PARCELADO')}
+                                className={`flex-1 py-3 rounded-lg border font-bold text-sm transition-all ${cpgType === 'PARCELADO' ? 'bg-purple-100 border-purple-500 text-purple-700 shadow-sm' : 'bg-white border-gray-200 text-gray-500'}`}
+                            >
+                                Parcelado
+                            </button>
+                        </div>
+                        
+                        {cpgType === 'PARCELADO' && (
+                            <div className="animate-fade-in">
+                                <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Número de Parcelas</label>
+                                <select 
+                                    value={cpgInstallments}
+                                    onChange={(e) => setCpgInstallments(Number(e.target.value))}
+                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 outline-none bg-white cursor-pointer"
+                                >
+                                    {Array.from({ length: 12 }, (_, i) => i + 1).map(num => (
+                                        <option key={num} value={num}>{num}x</option>
+                                    ))}
+                                </select>
+                            </div>
+                        )}
+
+                        <div className="bg-gray-50 p-3 rounded-lg border border-gray-100">
+                            <p className="text-[10px] text-gray-500">
+                                {cpgType === 'A_VISTA' 
+                                    ? "O registro será removido das abas individuais dos consultores em todos os relatórios Excel." 
+                                    : `O registro aparecerá nas abas individuais dos consultores por ${cpgInstallments} meses.`}
+                            </p>
+                        </div>
+                    </div>
+                    <div className="p-6 pt-0 flex gap-3">
+                        <button 
+                            onClick={() => setIsCPGModalOpen(false)} 
+                            className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded hover:bg-gray-50 font-bold text-sm"
+                        >
+                            Cancelar
+                        </button>
+                        <button 
+                            onClick={handleConfirmCPG} 
+                            className="flex-1 px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 font-bold text-sm shadow-md transition-all"
+                        >
+                            Confirmar CPG
                         </button>
                     </div>
                </div>
