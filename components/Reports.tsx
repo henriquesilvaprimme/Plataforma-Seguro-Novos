@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Lead, LeadStatus } from '../types';
-import { FileBarChart2, DollarSign, Shield, Calendar, Search, CheckCircle, ChevronLeft, ChevronRight, Percent, Plus, Download, UserCheck } from './Icons';
+import { FileBarChart2, DollarSign, Shield, Calendar, Search, CheckCircle, ChevronLeft, ChevronRight, Percent, Plus, Download, UserCheck, FileText } from './Icons';
 
 interface ReportsProps {
   leads: Lead[];
@@ -27,6 +27,10 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
   const [selectedLeadForCPG, setSelectedLeadForCPG] = useState<Lead | null>(null);
   const [cpgType, setCpgType] = useState<'A_VISTA' | 'PARCELADO'>('A_VISTA');
   const [cpgInstallments, setCpgInstallments] = useState(1);
+
+  // Estados para o Modal de PDF
+  const [isPDFModalOpen, setIsPDFModalOpen] = useState(false);
+  const [selectedUserForPDF, setSelectedUserForPDF] = useState('');
 
   const formatDisplayDate = (dateString?: string) => {
     if (!dateString) return '-';
@@ -147,7 +151,23 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
                 isFirstMonth
             );
 
-            if (monthDiff >= 0 && monthDiff < installmentsCount) {
+            // LOGICA CPG: Controle de visibilidade nos próximos relatórios
+            let isVisibleInMonth = false;
+            if (lead.commissionCPG) {
+                if (lead.commissionCPGType === 'A_VISTA') {
+                    // Se foi pago a vista, só aparece no primeiro relatório (mês da vigência)
+                    isVisibleInMonth = (monthDiff === 0);
+                } else if (lead.commissionCPGType === 'PARCELADO') {
+                    // Se parcelado, aparece até atingir o número de parcelas escolhido para o CPG
+                    const cpgLimit = lead.commissionCPGInstallments || 1;
+                    isVisibleInMonth = (monthDiff >= 0 && monthDiff < cpgLimit);
+                }
+            } else {
+                // Padrão: Aparece conforme o parcelamento do lead no sistema
+                isVisibleInMonth = (monthDiff >= 0 && monthDiff < installmentsCount);
+            }
+
+            if (isVisibleInMonth) {
                  items.push({
                      id: lead.id,
                      type: 'SALE',
@@ -221,6 +241,10 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
 
   const formatMoney = (val: number) => val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   const getAvg = (val: number, count: number) => count > 0 ? val / count : 0;
+
+  const collaborators = useMemo(() => {
+    return Array.from(new Set<string>(allMonthlyItems.map(i => String(i.collaborator)))).sort();
+  }, [allMonthlyItems]);
 
   const handleDownloadExcel = () => {
     const xmlHeader = `<?xml version="1.0"?>
@@ -368,8 +392,6 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
       sheet += `</Table></Worksheet>`;
       return sheet;
     };
-
-    const collaborators: string[] = Array.from(new Set<string>(allMonthlyItems.map(i => String(i.collaborator)))).sort();
     
     const calculateMetricsSubset = (subset: any[], isGeneral: boolean, tierMultiplier: number = 1) => {
       const data = {
@@ -414,17 +436,7 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
     let worksheets = createWorksheetXML('GERAL', allMonthlyItems, metricsGeneral, true, 1);
     
     collaborators.forEach(collab => {
-      // Filtragem CPG: Exclui da aba do usuário se CPG estiver ativo e atingir as condições
-      const subset = allMonthlyItems.filter(i => {
-          if (i.collaborator !== collab) return false;
-          
-          if (i.commissionCPG) {
-              if (i.commissionCPGType === 'A_VISTA') return false;
-              if (i.commissionCPGType === 'PARCELADO' && i.monthDiff >= (i.commissionCPGInstallments || 1)) return false;
-          }
-          
-          return true;
-      });
+      const subset = allMonthlyItems.filter(i => i.collaborator === collab);
       
       // LOGICA DE ESCALONAMENTO POR VENDAS (itens produzidos no mês selecionado)
       const salesCount = subset.filter(i => i.isFirstMonth).length;
@@ -508,6 +520,118 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
 
       setIsCPGModalOpen(false);
       setSelectedLeadForCPG(null);
+  };
+
+  const handleDownloadPDF = () => {
+      if (!selectedUserForPDF) return;
+
+      // Filtra itens para o PDF (Mês Selecionado e Usuário Específico)
+      const userItems = allMonthlyItems.filter(i => i.collaborator === selectedUserForPDF);
+      
+      const salesCount = userItems.filter(i => i.isFirstMonth).length;
+      let multiplier = 0.10;
+      if (salesCount >= 21 && salesCount <= 30) multiplier = 0.15;
+      else if (salesCount >= 31) multiplier = 0.20;
+
+      const totalComm = userItems.reduce((acc, item) => {
+          const bonusToSubtract = (item.hasPortoCard) ? (51 / item.totalInstallments) : 0;
+          return acc + ((item.monthlyCommission - bonusToSubtract) * multiplier);
+      }, 0);
+
+      const totalPrem = userItems.filter(i => i.isFirstMonth).reduce((acc, i) => acc + i.netPremium, 0);
+
+      const printWindow = window.open('', '_blank');
+      if (!printWindow) return;
+
+      const htmlContent = `
+        <html>
+        <head>
+          <title>Produção Comercial - ${selectedUserForPDF}</title>
+          <style>
+            body { font-family: sans-serif; padding: 40px; color: #333; }
+            h1 { color: #1e3a8a; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; margin-bottom: 20px; font-size: 24px; }
+            .header-info { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 30px; }
+            .card { background: #f9fafb; border: 1px solid #e5e7eb; padding: 15px; border-radius: 8px; }
+            .card h3 { margin: 0 0 5px; font-size: 12px; color: #6b7280; text-transform: uppercase; }
+            .card p { margin: 0; font-size: 18px; font-weight: bold; }
+            table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 11px; }
+            th { background: #1e3a8a; color: white; padding: 10px; text-align: left; }
+            td { padding: 8px; border-bottom: 1px solid #e5e7eb; }
+            .total-row { background: #f3f4f6; font-weight: bold; }
+            @media print { .no-print { display: none; } }
+          </style>
+        </head>
+        <body>
+          <h1>Relatório de Produção Comercial</h1>
+          <div class="header-info">
+            <div class="card">
+              <h3>Consultor</h3>
+              <p>${selectedUserForPDF}</p>
+            </div>
+            <div class="card">
+              <h3>Período</h3>
+              <p>${filterDate}</p>
+            </div>
+            <div class="card">
+              <h3>Prêmio Líquido (Mes)</h3>
+              <p>${formatMoney(totalPrem)}</p>
+            </div>
+            <div class="card">
+              <h3>Comissão Líquida (Mes)</h3>
+              <p>${formatMoney(totalComm)}</p>
+            </div>
+            <div class="card">
+              <h3>Itens Vendidos</h3>
+              <p>${salesCount}</p>
+            </div>
+            <div class="card">
+              <h3>Escalonamento (Tier)</h3>
+              <p>${(multiplier * 100).toFixed(0)}%</p>
+            </div>
+          </div>
+
+          <table>
+            <thead>
+              <tr>
+                <th>Vigência</th>
+                <th>Segurado</th>
+                <th>Seguradora</th>
+                <th>Prêmio Líq.</th>
+                <th>% Com.</th>
+                <th>Comissão Rel.</th>
+                <th>Parcela</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${userItems.map(item => {
+                const bonusToSubtract = (item.hasPortoCard) ? (51 / item.totalInstallments) : 0;
+                const monthlyComm = (item.monthlyCommission - bonusToSubtract) * multiplier;
+                return `
+                  <tr>
+                    <td>${formatDisplayDate(item.startDate)}</td>
+                    <td>${item.leadName.toUpperCase()}</td>
+                    <td>${item.insurer}</td>
+                    <td>${item.isFirstMonth ? formatMoney(item.netPremium) : '-'}</td>
+                    <td>${item.commissionPct}%</td>
+                    <td>${formatMoney(monthlyComm)}</td>
+                    <td>${item.currentInstallment}/${item.totalInstallments}</td>
+                  </tr>
+                `;
+              }).join('')}
+            </tbody>
+          </table>
+          
+          <div style="margin-top: 40px; text-align: center; color: #9ca3af; font-size: 10px;">
+            Gerado em ${new Date().toLocaleString('pt-BR')} - Grupo Primme Seguros
+          </div>
+          <script>window.onload = () => { window.print(); window.close(); }</script>
+        </body>
+        </html>
+      `;
+
+      printWindow.document.write(htmlContent);
+      printWindow.document.close();
+      setIsPDFModalOpen(false);
   };
 
   const paidItems = useMemo(() => {
@@ -669,9 +793,14 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
                         <h3 className="text-sm font-bold text-gray-600 uppercase tracking-wide flex items-center gap-2">
                             <Shield className="w-4 h-4" /> Resumo do Período
                         </h3>
-                        <button onClick={handleDownloadExcel} className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow-md">
-                            <Download className="w-4 h-4" /> Baixar Excel
-                        </button>
+                        <div className="flex gap-2">
+                            <button onClick={() => setIsPDFModalOpen(true)} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow-md">
+                                <FileText className="w-4 h-4" /> Baixar PDF
+                            </button>
+                            <button onClick={handleDownloadExcel} className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow-md">
+                                <Download className="w-4 h-4" /> Baixar Excel
+                            </button>
+                        </div>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div className="bg-gradient-to-br from-indigo-600 to-indigo-700 p-4 rounded-xl shadow-lg text-white">
@@ -935,7 +1064,7 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
                         <div className="bg-gray-50 p-3 rounded-lg border border-gray-100">
                             <p className="text-[10px] text-gray-500">
                                 {cpgType === 'A_VISTA' 
-                                    ? "O registro será removido das abas individuais dos consultores em todos os relatórios Excel." 
+                                    ? "O registro será removido das abas individuais dos consultores em todos os relatórios Excel subsequentes." 
                                     : `O registro aparecerá nas abas individuais dos consultores por ${cpgInstallments} meses.`}
                             </p>
                         </div>
@@ -952,6 +1081,53 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
                             className="flex-1 px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 font-bold text-sm shadow-md transition-all"
                         >
                             Confirmar CPG
+                        </button>
+                    </div>
+               </div>
+           </div>
+       )}
+
+       {/* POP-UP SELECIONAR USUÁRIO PARA PDF */}
+       {isPDFModalOpen && (
+           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fade-in">
+               <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden flex flex-col border border-gray-200">
+                    <div className="bg-blue-600 px-6 py-4 flex justify-between items-center text-white">
+                        <h2 className="font-bold text-lg flex items-center gap-2">
+                            <FileText className="w-5 h-5" /> Baixar PDF Comercial
+                        </h2>
+                        <button onClick={() => setIsPDFModalOpen(false)} className="hover:text-gray-200 transition-colors">✕</button>
+                    </div>
+                    <div className="p-6 space-y-4">
+                        <p className="text-sm text-gray-600 font-medium">
+                            Selecione o consultor para gerar o PDF de produção do mês <b>${filterDate}</b>.
+                        </p>
+                        <div>
+                            <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Consultor Ativo</label>
+                            <select 
+                                value={selectedUserForPDF}
+                                onChange={(e) => setSelectedUserForPDF(e.target.value)}
+                                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white cursor-pointer"
+                            >
+                                <option value="">-- Selecione o Usuário --</option>
+                                {collaborators.map(name => (
+                                    <option key={name} value={name}>{name}</option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
+                    <div className="p-6 pt-0 flex gap-3">
+                        <button 
+                            onClick={() => setIsPDFModalOpen(false)} 
+                            className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded hover:bg-gray-50 font-bold text-sm transition-colors"
+                        >
+                            Cancelar
+                        </button>
+                        <button 
+                            onClick={handleDownloadPDF} 
+                            disabled={!selectedUserForPDF}
+                            className="flex-1 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 font-bold text-sm shadow-md transition-all disabled:opacity-50"
+                        >
+                            Gerar PDF
                         </button>
                     </div>
                </div>
