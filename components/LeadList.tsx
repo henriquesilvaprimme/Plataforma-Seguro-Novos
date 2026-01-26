@@ -730,26 +730,37 @@ export const LeadList: React.FC<LeadListProps> = ({ leads, users, onSelectLead, 
 
   // Lógica de Identificação de Duplicidade (Nome, Cidade, Telefone)
   const duplicateIds = useMemo(() => {
-    const seen = new Map<string, string>();
-    const duplicates = new Set<string>();
+    const groups = new Map<string, Lead[]>();
     
-    // Ordena por createdAt ASC para manter o mais antigo como o "original"
-    const sortedByDate = [...leads].sort((a, b) => 
-      new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-    );
-
-    sortedByDate.forEach(l => {
+    leads.forEach(l => {
       const name = (l.name || '').toLowerCase().trim();
       const city = (l.city || '').toLowerCase().trim();
       const phone = (l.phone || '').replace(/\D/g, '');
-      
       const key = `${name}|${city}|${phone}`;
       
-      if (key.length > 5) { // Evita chaves vazias ou muito curtas
-          if (seen.has(key)) {
-              duplicates.add(l.id);
-          } else {
-              seen.set(key, l.id);
+      if (key.length > 5) {
+          if (!groups.has(key)) groups.set(key, []);
+          groups.get(key)!.push(l);
+      }
+    });
+
+    const duplicates = new Set<string>();
+    groups.forEach((groupLeads) => {
+      if (groupLeads.length > 1) {
+          // Ordena: leads com atribuição primeiro, depois por data de criação (mais antigos primeiro)
+          groupLeads.sort((a, b) => {
+              const aAssigned = !!(a.assignedTo && a.assignedTo.trim() !== '');
+              const bAssigned = !!(b.assignedTo && b.assignedTo.trim() !== '');
+              
+              if (aAssigned && !bAssigned) return -1;
+              if (!aAssigned && bAssigned) return 1;
+              
+              return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+          });
+
+          // O primeiro lead da lista ordenada é mantido como o "Original". Todos os outros são marcados como Duplicados.
+          for (let i = 1; i < groupLeads.length; i++) {
+              duplicates.add(groupLeads[i].id);
           }
       }
     });
