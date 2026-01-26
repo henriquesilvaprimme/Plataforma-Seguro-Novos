@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Lead, LeadStatus, User, DealInfo } from '../types';
 import { Search, Plus, Car, Calendar, MapPin, Shield, Phone, BrainCircuit, Users, Bell, ChevronRight, Edit, Check, AlertTriangle, XCircle } from './Icons';
 
@@ -50,9 +50,9 @@ const formatCreationDate = (dateString?: string) => {
     } catch (e) { return dateString; }
 };
 
-const LeadCard: React.FC<{ lead: Lead; users: User[]; onUpdate: (l: Lead) => void; onAdd: (l: Lead) => void; currentUser: User | null; isAlreadyClosed: boolean }> = ({ lead, users, onUpdate, onAdd, currentUser, isAlreadyClosed }) => {
-  const [isEditingStatus, setIsEditingStatus] = useState(lead.status === LeadStatus.NEW && !isAlreadyClosed);
-  const [isEditingUser, setIsEditingUser] = useState(!lead.assignedTo && !isAlreadyClosed);
+const LeadCard: React.FC<{ lead: Lead; users: User[]; onUpdate: (l: Lead) => void; onAdd: (l: Lead) => void; currentUser: User | null; isAlreadyClosed: boolean; isDuplicate: boolean }> = ({ lead, users, onUpdate, onAdd, currentUser, isAlreadyClosed, isDuplicate }) => {
+  const [isEditingStatus, setIsEditingStatus] = useState(lead.status === LeadStatus.NEW && !isAlreadyClosed && !isDuplicate);
+  const [isEditingUser, setIsEditingUser] = useState(!lead.assignedTo && !isAlreadyClosed && !isDuplicate);
   const [isEditingNotes, setIsEditingNotes] = useState(false);
 
   const [selectedStatus, setSelectedStatus] = useState<LeadStatus | "">(lead.status === LeadStatus.NEW ? "" : lead.status); 
@@ -105,9 +105,9 @@ const LeadCard: React.FC<{ lead: Lead; users: User[]; onUpdate: (l: Lead) => voi
   useEffect(() => {
     setObservation(lead.notes || '');
     setScheduleDate(lead.scheduledDate || '');
-    if (!lead.assignedTo && !isAlreadyClosed) setIsEditingUser(true);
+    if (!lead.assignedTo && !isAlreadyClosed && !isDuplicate) setIsEditingUser(true);
     setDealForm(prev => ({ ...prev, leadName: lead.name }));
-  }, [lead, isAlreadyClosed]);
+  }, [lead, isAlreadyClosed, isDuplicate]);
 
   const isValidToSave = () => {
     if (!selectedStatus) return false; 
@@ -177,11 +177,15 @@ const LeadCard: React.FC<{ lead: Lead; users: User[]; onUpdate: (l: Lead) => voi
   };
 
   const handleDiscardDuplicate = () => {
-      if (confirm("Deseja descartar este lead? Ele será removido da sua lista e do Dashboard para evitar duplicidade de contagem.")) {
+      const msg = isDuplicate 
+        ? "Deseja excluir este lead por duplicidade? Ele será removido da sua lista e do Dashboard."
+        : "Deseja descartar este lead? Ele será removido da sua lista e do Dashboard para evitar duplicidade de contagem.";
+      
+      if (confirm(msg)) {
           onUpdate({
               ...lead,
               isDiscarded: true,
-              notes: (lead.notes || '') + "\n[SISTEMA] Lead descartado por duplicidade (Já Fechado)."
+              notes: (lead.notes || '') + (isDuplicate ? "\n[SISTEMA] Lead excluído por duplicidade (Nome, Cidade e Telefone)." : "\n[SISTEMA] Lead descartado por duplicidade (Já Fechado).")
           });
       }
   };
@@ -212,7 +216,7 @@ const LeadCard: React.FC<{ lead: Lead; users: User[]; onUpdate: (l: Lead) => voi
     ? 'bg-green-50 border-green-200' 
     : lead.status === LeadStatus.LOST 
       ? 'bg-red-50 border-red-200' 
-      : isAlreadyClosed
+      : (isAlreadyClosed || isDuplicate)
         ? 'bg-orange-50 border-orange-200'
         : 'bg-white border-gray-200';
   
@@ -236,6 +240,13 @@ const LeadCard: React.FC<{ lead: Lead; users: User[]; onUpdate: (l: Lead) => voi
                             <span className="flex items-center gap-1 bg-red-600 text-white px-2 py-0.5 rounded text-[10px] font-bold border border-red-700 animate-pulse">
                                 <AlertTriangle className="w-3 h-3" />
                                 JÁ FECHADO NO SISTEMA
+                            </span>
+                        )}
+
+                        {isDuplicate && (
+                            <span className="flex items-center gap-1 bg-orange-600 text-white px-2 py-0.5 rounded text-[10px] font-bold border border-orange-700">
+                                <AlertTriangle className="w-3 h-3" />
+                                LEAD EM DUPLICIDADE
                             </span>
                         )}
 
@@ -291,8 +302,7 @@ const LeadCard: React.FC<{ lead: Lead; users: User[]; onUpdate: (l: Lead) => voi
                 </div>
 
                 <div className="mt-1 flex flex-wrap gap-2">
-                    {/* Campos de Status do Lead ocultados se já fechado conforme solicitado */}
-                    {isEditingStatus && !isAlreadyClosed && (
+                    {isEditingStatus && !isAlreadyClosed && !isDuplicate && (
                         <div className="w-full">
                             <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5 block">
                                 Status do Lead
@@ -326,7 +336,7 @@ const LeadCard: React.FC<{ lead: Lead; users: User[]; onUpdate: (l: Lead) => voi
                     
                     {!isEditingStatus && (
                         <>
-                             {!isLocked && !isAlreadyClosed && (
+                             {!isLocked && !isAlreadyClosed && !isDuplicate && (
                                 <button 
                                     onClick={() => setIsEditingStatus(true)}
                                     className="bg-yellow-100 hover:bg-yellow-200 text-yellow-700 border border-yellow-300 px-3 py-1 rounded text-[10px] font-bold transition-colors shadow-sm uppercase tracking-wide w-auto"
@@ -335,13 +345,13 @@ const LeadCard: React.FC<{ lead: Lead; users: User[]; onUpdate: (l: Lead) => voi
                                 </button>
                              )}
 
-                             {isAlreadyClosed && lead.status !== LeadStatus.LOST && (
+                             {(isAlreadyClosed || isDuplicate) && lead.status !== LeadStatus.LOST && (
                                  <button 
                                     onClick={handleDiscardDuplicate}
                                     className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-[10px] font-bold transition-colors shadow-sm uppercase tracking-wide flex items-center gap-1 border border-red-700"
                                  >
                                      <XCircle className="w-3 h-3" />
-                                     DESCARTAR LEAD
+                                     {isDuplicate ? 'EXCLUIR LEAD' : 'DESCARTAR LEAD'}
                                  </button>
                              )}
                         </>
@@ -349,8 +359,7 @@ const LeadCard: React.FC<{ lead: Lead; users: User[]; onUpdate: (l: Lead) => voi
                 </div>
             </div>
 
-            {/* Campos de Atribuição ocultados se já fechado conforme solicitado */}
-            {!isAlreadyClosed && (
+            {!isAlreadyClosed && !isDuplicate && (
                 <div className="grid grid-cols-1 gap-0.5 pt-1 border-t border-gray-100 mt-0.5">
                     <div className="flex flex-col gap-0.5">
                         <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1">
@@ -534,7 +543,7 @@ const LeadCard: React.FC<{ lead: Lead; users: User[]; onUpdate: (l: Lead) => voi
 
     {showDealModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fade-in">
-            <div className="bg-white rounded-lg shadow-xl w-full max-w-md overflow-hidden animate-fade-in">
+            <div className="bg-white rounded-lg shadow-xl w-full max-md overflow-hidden animate-fade-in">
                 <div className="bg-green-600 px-6 py-4 flex justify-between items-center">
                     <h2 className="text-white font-bold text-lg flex items-center gap-2">
                         <Shield className="w-5 h-5" />
@@ -719,6 +728,34 @@ export const LeadList: React.FC<LeadListProps> = ({ leads, users, onSelectLead, 
     }
   }, [leads, currentUser]);
 
+  // Lógica de Identificação de Duplicidade (Nome, Cidade, Telefone)
+  const duplicateIds = useMemo(() => {
+    const seen = new Map<string, string>();
+    const duplicates = new Set<string>();
+    
+    // Ordena por createdAt ASC para manter o mais antigo como o "original"
+    const sortedByDate = [...leads].sort((a, b) => 
+      new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+    );
+
+    sortedByDate.forEach(l => {
+      const name = (l.name || '').toLowerCase().trim();
+      const city = (l.city || '').toLowerCase().trim();
+      const phone = (l.phone || '').replace(/\D/g, '');
+      
+      const key = `${name}|${city}|${phone}`;
+      
+      if (key.length > 5) { // Evita chaves vazias ou muito curtas
+          if (seen.has(key)) {
+              duplicates.add(l.id);
+          } else {
+              seen.set(key, l.id);
+          }
+      }
+    });
+    return duplicates;
+  }, [leads]);
+
   const filteredLeads = leads.filter(lead => {
     const term = searchTerm.toLowerCase();
     const name = lead.name || '';
@@ -841,7 +878,8 @@ export const LeadList: React.FC<LeadListProps> = ({ leads, users, onSelectLead, 
         {paginatedLeads.map((lead) => {
             const normalizedPhone = (lead.phone || '').replace(/\D/g, '');
             const isAlreadyClosed = lead.status !== LeadStatus.CLOSED && closedPhones.has(normalizedPhone);
-            
+            const isDuplicate = duplicateIds.has(lead.id);
+
             return (
                 <LeadCard 
                     key={lead.id} 
@@ -851,6 +889,7 @@ export const LeadList: React.FC<LeadListProps> = ({ leads, users, onSelectLead, 
                     onAdd={onAddLead}
                     currentUser={currentUser}
                     isAlreadyClosed={isAlreadyClosed}
+                    isDuplicate={isDuplicate}
                 />
             );
         })}
