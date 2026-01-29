@@ -104,6 +104,8 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
       return { 
         baseValue: baseValue + (hasPortoCard ? 51 : 0),
         finalValue: totalMonthlyValue, 
+        basePortion: finalBaseWithTax,
+        bonusPortion: bonusPortion,
         pendingValue: pendingValue,
         installmentsCount: installmentsCount 
       };
@@ -139,7 +141,7 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
             // Puxa o Premio Liquido Novo conforme solicitado
             const currentPremium = lead.dealInfo.newNetPremium || lead.dealInfo.netPremium || 0;
 
-            const { finalValue, pendingValue, installmentsCount } = calculateCommissionRules(
+            const { finalValue, pendingValue, installmentsCount, basePortion, bonusPortion } = calculateCommissionRules(
                 currentPremium, 
                 lead.dealInfo.commission, 
                 lead.dealInfo.paymentMethod, 
@@ -184,6 +186,8 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
                      currentInstallment: monthDiff + 1,
                      totalInstallments: installmentsCount,
                      monthlyCommission: finalValue,
+                     basePortion: basePortion,
+                     bonusPortion: bonusPortion,
                      pendingCommission: pendingValue,
                      hasPortoCard: !!lead.cartaoPortoNovo,
                      // Dados CPG
@@ -240,6 +244,7 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
   }, [allMonthlyItems]);
 
   const formatMoney = (val: number) => val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  const formatNumber = (val: number) => val.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const getAvg = (val: number, count: number) => count > 0 ? val / count : 0;
 
   const collaborators = useMemo(() => {
@@ -362,12 +367,18 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
        </Row>`;
 
       items.forEach(item => {
-        const bonusToSubtract = (!isGeneral && item.hasPortoCard) ? (51 / item.totalInstallments) : 0;
-        let displayMonthlyCommission = item.monthlyCommission - bonusToSubtract;
+        const bonusPortion = item.hasPortoCard ? (51 / item.totalInstallments) : 0;
+        let baseCommValue = item.monthlyCommission - bonusPortion;
         
         // Regra do Escalonamento: Multiplica pela porcentagem do tier se não for aba GERAL
         if (!isGeneral) {
-            displayMonthlyCommission *= tierMultiplier;
+            baseCommValue *= tierMultiplier;
+        }
+
+        let displayCommStr = formatMoney(baseCommValue);
+        // AJUSTE: Exibe o bônus apenas se for o relatório GERAL
+        if (isGeneral && item.hasPortoCard) {
+            displayCommStr += ` + ${formatNumber(bonusPortion)}`;
         }
 
         const displayBaseCommissionValue = (item.netPremium * (item.commissionPct / 100)) + (isGeneral && item.hasPortoCard && item.isFirstMonth ? 51 : 0);
@@ -383,7 +394,7 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
         <Cell ss:StyleID="cellNormal"><Data ss:Type="String">${formatMoney(displayBaseCommissionValue)}</Data></Cell>
         <Cell ss:StyleID="cellNormal"><Data ss:Type="String">${item.paymentMethod}</Data></Cell>
         <Cell ss:StyleID="cellNormal"><Data ss:Type="String">${item.installments}</Data></Cell>
-        <Cell ss:StyleID="cellGreen"><Data ss:Type="String">${formatMoney(displayMonthlyCommission)}</Data></Cell>
+        <Cell ss:StyleID="cellGreen"><Data ss:Type="String">${displayCommStr}</Data></Cell>
         <Cell ss:StyleID="cellNormal"><Data ss:Type="String">${item.currentInstallment}/${item.totalInstallments}</Data></Cell>
         <Cell ss:StyleID="cellNormal"><Data ss:Type="String">${item.collaborator}</Data></Cell>
        </Row>`;
@@ -400,29 +411,30 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
           renewal: { premium: 0, commission: 0, count: 0, commPctSum: 0 }
       };
       subset.forEach(item => {
-          const bonusToSubtract = (!isGeneral && item.hasPortoCard) ? (51 / item.totalInstallments) : 0;
-          let commissionVal = item.monthlyCommission - bonusToSubtract;
+          const bonusPortion = item.hasPortoCard ? (51 / item.totalInstallments) : 0;
+          let commissionVal = item.monthlyCommission - bonusPortion;
           
           // Aplica o multiplicador do tier se for colaborador
           if (!isGeneral) {
               commissionVal *= tierMultiplier;
           }
 
-          data.general.commission += commissionVal;
+          // A comissão total para métricas inclui o bônus se for o caso GERAL
+          data.general.commission += (commissionVal + (isGeneral ? bonusPortion : 0));
           if (item.isFirstMonth) {
               data.general.premium += item.netPremium || 0;
               data.general.count++;
               data.general.commPctSum += item.commissionPct || 0;
           }
           if (item.subtype === 'Renovação Primme') {
-              data.renewal.commission += commissionVal;
+              data.renewal.commission += (commissionVal + (isGeneral ? bonusPortion : 0));
               if (item.isFirstMonth) {
                   data.renewal.premium += item.netPremium || 0;
                   data.renewal.count++;
                   data.renewal.commPctSum += item.commissionPct || 0;
               }
           } else {
-              data.new.commission += commissionVal;
+              data.new.commission += (commissionVal + (isGeneral ? bonusPortion : 0));
               if (item.isFirstMonth) {
                   data.new.premium += item.netPremium || 0;
                   data.new.count++;
@@ -533,9 +545,10 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
       if (salesCount >= 21 && salesCount <= 30) multiplier = 0.15;
       else if (salesCount >= 31) multiplier = 0.20;
 
+      // Ajuste no totalComm do PDF: Omitindo os 51.00 do consultor
       const totalComm = userItems.reduce((acc, item) => {
-          const bonusToSubtract = (item.hasPortoCard) ? (51 / item.totalInstallments) : 0;
-          return acc + ((item.monthlyCommission - bonusToSubtract) * multiplier);
+          const bonusPortion = item.hasPortoCard ? (51 / item.totalInstallments) : 0;
+          return acc + ((item.monthlyCommission - bonusPortion) * multiplier);
       }, 0);
 
       const totalPrem = userItems.filter(i => i.isFirstMonth).reduce((acc, i) => acc + i.netPremium, 0);
@@ -604,8 +617,13 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
             </thead>
             <tbody>
               ${userItems.map(item => {
-                const bonusToSubtract = (item.hasPortoCard) ? (51 / item.totalInstallments) : 0;
-                const monthlyComm = (item.monthlyCommission - bonusToSubtract) * multiplier;
+                const bonusPortion = item.hasPortoCard ? (51 / item.totalInstallments) : 0;
+                // Exibe apenas a base multiplicada pelo multiplier (omite o bônus de 51.00)
+                const monthlyBase = (item.monthlyCommission - bonusPortion) * multiplier;
+                
+                let commDisplay = formatMoney(monthlyBase);
+                // Omitindo "+ 51,00" aqui propositalmente conforme pedido
+
                 return `
                   <tr>
                     <td>${formatDisplayDate(item.startDate)}</td>
@@ -613,7 +631,7 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
                     <td>${item.insurer}</td>
                     <td>${item.isFirstMonth ? formatMoney(item.netPremium) : '-'}</td>
                     <td>${item.commissionPct}%</td>
-                    <td>${formatMoney(monthlyComm)}</td>
+                    <td>${commDisplay}</td>
                     <td>${item.currentInstallment}/${item.totalInstallments}</td>
                   </tr>
                 `;
@@ -679,7 +697,7 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
 
         // Regra 1: No mês da Vigência (Month 0) - Mostra tudo
         if (monthDiff === 0) {
-            const { finalValue, pendingValue } = calculateCommissionRules(
+            const { finalValue, pendingValue, basePortion, bonusPortion } = calculateCommissionRules(
                 currentPremium, lead.dealInfo.commission, lead.dealInfo.paymentMethod, lead.dealInfo.installments,
                 lead.commissionPaid, lead.cartaoPortoNovo, lead.commissionInstallmentPlan ? lead.commissionCustomInstallments : undefined,
                 lead.commissionCP, true
@@ -688,6 +706,8 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
                 ...lead,
                 displayType: 'REGULAR',
                 commissionValue: finalValue,
+                basePortion,
+                bonusPortion,
                 pendingValue: pendingValue,
                 installmentText: isInstallment ? `1/${installmentsCount}` : null
             });
@@ -699,7 +719,7 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
 
             // Caso A: Sem nenhum status (Pendente Total)
             if (!isInstallment) {
-                 const { finalValue, pendingValue } = calculateCommissionRules(
+                 const { finalValue, pendingValue, basePortion, bonusPortion } = calculateCommissionRules(
                     currentPremium, lead.dealInfo.commission, lead.dealInfo.paymentMethod, lead.dealInfo.installments,
                     false, lead.cartaoPortoNovo, undefined, lead.commissionCP, false
                  );
@@ -707,13 +727,15 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
                     ...lead,
                     displayType: 'PENDING_PAST',
                     commissionValue: finalValue,
+                    basePortion,
+                    bonusPortion,
                     pendingValue: pendingValue,
                     installmentText: null
                  });
             } 
             // Caso B: Parcelado (Mostra progresso e apenas botão Paga)
             else if (isInstallment && monthDiff < installmentsCount) {
-                const { finalValue, pendingValue } = calculateCommissionRules(
+                const { finalValue, pendingValue, basePortion, bonusPortion } = calculateCommissionRules(
                     currentPremium, lead.dealInfo.commission, lead.dealInfo.paymentMethod, lead.dealInfo.installments,
                     false, lead.cartaoPortoNovo, installmentsCount, lead.commissionCP, false
                 );
@@ -722,6 +744,8 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
                     ...lead,
                     displayType: 'INSTALLMENT',
                     commissionValue: finalValue,
+                    basePortion,
+                    bonusPortion,
                     pendingValue: pendingValue,
                     installmentText: `${monthDiff + 1}/${installmentsCount}`
                 });
@@ -735,6 +759,8 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
                     ...lead,
                     displayType: 'CP_ONLY',
                     commissionValue: bonusPortion,
+                    basePortion: 0,
+                    bonusPortion: bonusPortion,
                     pendingValue: bonusPortion,
                     installmentText: null
                  });
@@ -921,7 +947,16 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
                                             <td className="px-4 py-3 text-xs text-gray-700">{item.dealInfo?.insurer}</td>
                                             <td className="px-4 py-3 text-xs font-bold text-gray-900">{item.displayType === 'CP_ONLY' ? 'R$ 0,00' : formatMoney(item.dealInfo?.newNetPremium || item.dealInfo?.netPremium || 0)}</td>
                                             <td className="px-4 py-3 text-xs font-bold text-indigo-600 text-center">{item.displayType === 'CP_ONLY' ? '-' : `${item.dealInfo?.commission}%`}</td>
-                                            <td className="px-4 py-3 text-xs font-bold text-green-700 bg-green-50/50">{formatMoney(item.commissionValue || 0)}</td>
+                                            <td className="px-4 py-3 text-xs font-bold text-green-700 bg-green-50/50">
+                                                {item.cartaoPortoNovo && item.displayType !== 'CP_ONLY' ? (
+                                                    <span className="flex items-center gap-1">
+                                                        {formatMoney(item.basePortion)} 
+                                                        <span className="text-[10px] text-indigo-500 font-extrabold">+ {formatNumber(item.bonusPortion)}</span>
+                                                    </span>
+                                                ) : (
+                                                    formatMoney(item.commissionValue || 0)
+                                                )}
+                                            </td>
                                             <td className="px-4 py-3">
                                                 <div className="flex items-center justify-center gap-2">
                                                     {(item.displayType === 'REGULAR' || item.displayType === 'PENDING_PAST' || item.displayType === 'INSTALLMENT') && (
