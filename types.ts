@@ -63,6 +63,7 @@ export interface Lead {
   commissionCP?: boolean;
   commissionInstallmentPlan?: boolean; // Novo: Define se segue a regra de parcelamento
   commissionCustomInstallments?: number; // Novo: Número de parcelas definido manualmente
+  commissionInstallmentDate?: string; // NOVO: Data em que o parcelamento foi ativado
   
   // Controle CPG (Comissão Paga ao Gerente/Consultor)
   commissionCPG?: boolean;
