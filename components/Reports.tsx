@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Lead, LeadStatus } from '../types';
-import { FileBarChart2, DollarSign, Shield, Calendar, Search, CheckCircle, ChevronLeft, ChevronRight, Percent, Plus, Download, UserCheck, FileText } from './Icons';
+import { FileBarChart2, DollarSign, Shield, Calendar, Search, CheckCircle, ChevronLeft, ChevronRight, Percent, Plus, Download, UserCheck, FileText, Check } from './Icons';
 
 interface ReportsProps {
   leads: Lead[];
@@ -65,11 +65,9 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
       
       let installmentsCount = 1;
 
-      // Prioridade 1: Parcelamento Manual Escolhido pelo Usuário
       if (customInstallments && customInstallments > 0) {
           installmentsCount = customInstallments;
       } 
-      // Prioridade 2: Regras Automáticas (se NÃO estiver marcado como integral/pago)
       else if (!isPaid) {
           if (method.includes('CARTÃO PORTO') || method.includes('CP')) {
               installmentsCount = 1;
@@ -88,7 +86,6 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
       
       const totalMonthlyValue = finalBaseWithTax + bonusPortion;
 
-      // Cálculo do que ainda é pendente para este item/mês específico
       let pendingValue = 0;
       
       if (isPaid) {
@@ -142,7 +139,6 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
             const monthDiff = (filterYear - startYear) * 12 + (filterMonth - startMonth);
             const isFirstMonth = monthDiff === 0;
 
-            // Puxa o Premio Liquido Novo conforme solicitado
             const currentPremium = lead.dealInfo.newNetPremium || lead.dealInfo.netPremium || 0;
 
             const { finalValue, pendingValue, installmentsCount, basePortion, bonusPortion } = calculateCommissionRules(
@@ -157,19 +153,15 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
                 isFirstMonth
             );
 
-            // LOGICA CPG: Controle de visibilidade nos próximos relatórios
             let isVisibleInMonth = false;
             if (lead.commissionCPG) {
                 if (lead.commissionCPGType === 'A_VISTA') {
-                    // Se foi pago a vista, só aparece no primeiro relatório (mês da vigência)
                     isVisibleInMonth = (monthDiff === 0);
                 } else if (lead.commissionCPGType === 'PARCELADO') {
-                    // Se parcelado, aparece até atingir o número de parcelas escolhido para o CPG
                     const cpgLimit = lead.commissionCPGInstallments || 1;
                     isVisibleInMonth = (monthDiff >= 0 && monthDiff < cpgLimit);
                 }
             } else {
-                // Padrão: Aparece conforme o parcelamento do lead no sistema
                 isVisibleInMonth = (monthDiff >= 0 && monthDiff < installmentsCount);
             }
 
@@ -194,7 +186,6 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
                      bonusPortion: bonusPortion,
                      pendingCommission: pendingValue,
                      hasPortoCard: !!lead.cartaoPortoNovo,
-                     // Dados CPG
                      commissionCPG: lead.commissionCPG,
                      commissionCPGType: lead.commissionCPGType,
                      commissionCPGInstallments: lead.commissionCPGInstallments,
@@ -374,13 +365,11 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
         const bonusPortion = item.hasPortoCard ? (51 / item.totalInstallments) : 0;
         let baseCommValue = item.monthlyCommission - bonusPortion;
         
-        // Regra do Escalonamento: Multiplica pela porcentagem do tier se não for aba GERAL
         if (!isGeneral) {
             baseCommValue *= tierMultiplier;
         }
 
         let displayCommStr = formatMoney(baseCommValue);
-        // AJUSTE: Exibe o bônus apenas se for o relatório GERAL
         if (isGeneral && item.hasPortoCard) {
             displayCommStr += ` + ${formatNumber(bonusPortion)}`;
         }
@@ -418,12 +407,10 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
           const bonusPortion = item.hasPortoCard ? (51 / item.totalInstallments) : 0;
           let commissionVal = item.monthlyCommission - bonusPortion;
           
-          // Aplica o multiplicador do tier se for colaborador
           if (!isGeneral) {
               commissionVal *= tierMultiplier;
           }
 
-          // A comissão total para métricas inclui o bônus se for o caso GERAL
           data.general.commission += (commissionVal + (isGeneral ? bonusPortion : 0));
           if (item.isFirstMonth) {
               data.general.premium += item.netPremium || 0;
@@ -453,16 +440,13 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
     
     collaborators.forEach(collab => {
       const subset = allMonthlyItems.filter(i => i.collaborator === collab);
-      
-      // LOGICA DE ESCALONAMENTO POR VENDAS (itens produzidos no mês selecionado)
       const salesCount = subset.filter(i => i.isFirstMonth).length;
-      let multiplier = 0.10; // 1 a 20 vendas (Padrão)
+      let multiplier = 0.10;
       if (salesCount >= 21 && salesCount <= 30) {
           multiplier = 0.15;
       } else if (salesCount >= 31) {
           multiplier = 0.20;
       }
-
       worksheets += createWorksheetXML(collab, subset, calculateMetricsSubset(subset, false, multiplier), false, multiplier);
     });
 
@@ -481,7 +465,6 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
   const toggleCheck = (lead: any, field: string) => {
       if (!onUpdateLead) return;
       
-      // Caso CPG
       if (field === 'commissionCPG') {
           setSelectedLeadForCPG(lead);
           setCpgType('A_VISTA');
@@ -490,7 +473,6 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
           return;
       }
 
-      // Se estiver clicando em PARCELADO e ele estiver FALSO, abre o modal
       if (field === 'commissionInstallmentPlan' && !lead.commissionInstallmentPlan) {
           setSelectedLeadForInstallments(lead);
           setCustomInstallmentValue(1);
@@ -498,7 +480,6 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
           return;
       }
 
-      // NOVO: Abre o modal de pagamento de parcela se for a partir da 2a parcela
       if (field === 'payInstallment') {
           setSelectedLeadForPayInstallment(lead);
           setIsPayInstallmentModalOpen(true);
@@ -511,10 +492,12 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
           update.commissionInstallmentPlan = false;
           update.commissionCustomInstallments = 0;
           update.commissionPaidInstallments = 0;
+          update.commissionPaidDate = new Date().toISOString();
       } else if (field === 'commissionInstallmentPlan' && !update[field]) {
           update.commissionCustomInstallments = 0;
           update.commissionInstallmentDate = null;
           update.commissionPaidInstallments = 0;
+          update.commissionPaidDate = '';
       }
 
       onUpdateLead({ ...lead, ...update });
@@ -524,19 +507,19 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
       if (!selectedLeadForPayInstallment || !onUpdateLead) return;
 
       const total = selectedLeadForPayInstallment.commissionCustomInstallments || 1;
-      const current = (selectedLeadForPayInstallment.monthDiff || 0) + 1;
+      const currentInstNum = (selectedLeadForPayInstallment.parcelMonthDiff || 0) + 1;
       
-      const update: any = {};
+      const update: any = {
+          commissionPaidDate: new Date().toISOString()
+      };
       
       if (isAtVista) {
-          // À Vista: Quita tudo
           update.commissionPaid = true;
           update.commissionInstallmentPlan = false;
           update.commissionPaidInstallments = total;
       } else {
-          // Parcela individual: PG X/Y
-          update.commissionPaidInstallments = current;
-          if (current >= total) {
+          update.commissionPaidInstallments = currentInstNum;
+          if (currentInstNum >= total) {
               update.commissionPaid = true;
           }
       }
@@ -554,8 +537,9 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
           commissionInstallmentPlan: true,
           commissionPaid: false,
           commissionCustomInstallments: customInstallmentValue,
-          commissionInstallmentDate: new Date().toISOString(), // GRAVA A DATA DE ATIVAÇÃO
-          commissionPaidInstallments: 0
+          commissionInstallmentDate: new Date().toISOString(), 
+          commissionPaidInstallments: 1, // Primeira parcela paga no ato
+          commissionPaidDate: new Date().toISOString()
       });
 
       setIsInstallmentModalOpen(false);
@@ -578,16 +562,12 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
 
   const handleDownloadPDF = () => {
       if (!selectedUserForPDF) return;
-
-      // Filtra itens para o PDF (Mês Selecionado e Usuário Específico)
       const userItems = allMonthlyItems.filter(i => i.collaborator === selectedUserForPDF);
-      
       const salesCount = userItems.filter(i => i.isFirstMonth).length;
       let multiplier = 0.10;
       if (salesCount >= 21 && salesCount <= 30) multiplier = 0.15;
       else if (salesCount >= 31) multiplier = 0.20;
 
-      // Ajuste no totalComm do PDF: Omitindo os 51.00 do consultor
       const totalComm = userItems.reduce((acc, item) => {
           const bonusPortion = item.hasPortoCard ? (51 / item.totalInstallments) : 0;
           return acc + ((item.monthlyCommission - bonusPortion) * multiplier);
@@ -612,7 +592,6 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
             table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 11px; }
             th { background: #1e3a8a; color: white; padding: 10px; text-align: left; }
             td { padding: 8px; border-bottom: 1px solid #e5e7eb; }
-            .total-row { background: #f3f4f6; font-weight: bold; }
             @media print { .no-print { display: none; } }
           </style>
         </head>
@@ -644,7 +623,6 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
               <p>${(multiplier * 100).toFixed(0)}%</p>
             </div>
           </div>
-
           <table>
             <thead>
               <tr>
@@ -660,12 +638,7 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
             <tbody>
               ${userItems.map(item => {
                 const bonusPortion = item.hasPortoCard ? (51 / item.totalInstallments) : 0;
-                // Exibe apenas a base multiplicada pelo multiplier (omite o bônus de 51.00)
                 const monthlyBase = (item.monthlyCommission - bonusPortion) * multiplier;
-                
-                let commDisplay = formatMoney(monthlyBase);
-                // Omitindo "+ 51,00" aqui propositalmente conforme pedido
-
                 return `
                   <tr>
                     <td>${formatDisplayDate(item.startDate)}</td>
@@ -673,14 +646,13 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
                     <td>${item.insurer}</td>
                     <td>${item.isFirstMonth ? formatMoney(item.netPremium) : '-'}</td>
                     <td>${item.commissionPct}%</td>
-                    <td>${commDisplay}</td>
+                    <td>${formatMoney(monthlyBase)}</td>
                     <td>${item.currentInstallment}/${item.totalInstallments}</td>
                   </tr>
                 `;
               }).join('')}
             </tbody>
           </table>
-          
           <div style="margin-top: 40px; text-align: center; color: #9ca3af; font-size: 10px;">
             Gerado em ${new Date().toLocaleString('pt-BR')} - Grupo Primme Seguros
           </div>
@@ -688,7 +660,6 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
         </body>
         </html>
       `;
-
       printWindow.document.write(htmlContent);
       printWindow.document.close();
       setIsPDFModalOpen(false);
@@ -699,7 +670,7 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
     const term = searchTermPaid.toLowerCase();
     const seenIds = new Set();
     const result: any[] = [];
-    const today = new Date();
+    const realToday = new Date();
 
     const [fYear, fMonth] = filterDatePaid.split('-').map(Number);
 
@@ -710,7 +681,6 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
     });
 
     uniqueLeads.forEach(lead => {
-        // Regra Estrita: Exclui leads cancelados (LOST)
         if (lead.status !== LeadStatus.CLOSED || !lead.dealInfo) return;
 
         const name = (lead.name || '').toLowerCase();
@@ -718,6 +688,70 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
         const matchesSearch = name.includes(term) || phone.includes(term);
         if (!matchesSearch) return;
 
+        const isInstallment = lead.commissionInstallmentPlan;
+        const paidInstCount = lead.commissionPaidInstallments || 0;
+        const hasCP = lead.cartaoPortoNovo;
+        const isCPPaid = lead.commissionCP;
+        const totalInst = lead.commissionCustomInstallments || 1;
+
+        // --- LÓGICA DE VISIBILIDADE PARA PARCELADOS ---
+        if (isInstallment && lead.commissionInstallmentDate) {
+            const activationDate = new Date(lead.commissionInstallmentDate);
+            const actDay = activationDate.getDate();
+            const actYear = activationDate.getFullYear();
+            const actMonth = activationDate.getMonth() + 1;
+            
+            const parcelMonthDiff = (fYear - actYear) * 12 + (fMonth - actMonth);
+            const currentInstNum = parcelMonthDiff + 1;
+
+            // Pertence ao período filtrado? (Entre parcela 1 e totalInst)
+            if (parcelMonthDiff < 0 || currentInstNum > totalInst) {
+                // Caso especial bônus CP residual que pode aparecer em meses seguintes se não pago
+                if (currentInstNum > totalInst && lead.commissionPaid && hasCP && !isCPPaid) {
+                     const bonusValue = (51 / totalInst);
+                     result.push({
+                        ...lead,
+                        displayType: 'CP_ONLY',
+                        commissionValue: bonusValue,
+                        basePortion: 0,
+                        bonusPortion: bonusValue,
+                        pendingValue: bonusValue,
+                        installmentText: null,
+                        isPaidCurrent: false
+                     });
+                }
+                return;
+            }
+
+            // Regra do dia do mês: só aparece se hoje já for dia >= dia de ativação (trava de competência)
+            if (fYear === realToday.getFullYear() && fMonth === (realToday.getMonth() + 1)) {
+                if (realToday.getDate() < actDay) return;
+            }
+
+            // Determinar se esta parcela específica já foi paga
+            const isPaidCurrent = paidInstCount >= currentInstNum;
+
+            const currentPremium = lead.dealInfo.newNetPremium || lead.dealInfo.netPremium || 0;
+            const { finalValue, pendingValue, basePortion, bonusPortion } = calculateCommissionRules(
+                currentPremium, lead.dealInfo.commission, lead.dealInfo.paymentMethod, lead.dealInfo.installments,
+                false, lead.cartaoPortoNovo, totalInst, lead.commissionCP, false
+            );
+
+            result.push({
+                ...lead,
+                displayType: 'INSTALLMENT',
+                commissionValue: finalValue,
+                basePortion,
+                bonusPortion,
+                pendingValue: pendingValue,
+                installmentText: `${currentInstNum}/${totalInst}`,
+                parcelMonthDiff: parcelMonthDiff,
+                isPaidCurrent: isPaidCurrent
+            });
+            return;
+        }
+
+        // --- LÓGICA PADRÃO (REGULAR OU PENDENTE) ---
         const startDateStr = lead.dealInfo.startDate;
         let normalizedStart = startDateStr;
         if (startDateStr.includes('/')) {
@@ -727,43 +761,15 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
         const [startYear, startMonth] = normalizedStart.split('-').map(Number);
         const monthDiff = (fYear - startYear) * 12 + (fMonth - startMonth);
 
-        const isInstallment = lead.commissionInstallmentPlan;
-        const installmentsCount = isInstallment ? (lead.commissionCustomInstallments || 1) : 1;
-        const hasCP = lead.cartaoPortoNovo;
-        const isCPPaid = lead.commissionCP;
-        const paidInstCount = lead.commissionPaidInstallments || 0;
-
-        // Se monthDiff < 0, significa que o seguro ainda nem começou, não aparece em Seguros Pagos.
+        // Se o mês filtrado for anterior ao início, ignora.
         if (monthDiff < 0) return;
 
-        // Se for marcado como integralmente PAGA E CP PAGA, não aparece mais
-        if (lead.commissionPaid && (!hasCP || isCPPaid)) return;
-
-        // TRAVA DE BAIXA INDIVIDUAL: Se esta parcela já foi marcada como paga, pula.
-        if (isInstallment && (monthDiff + 1) <= paidInstCount) return;
-
-        // --- TRAVA DE DATA PARA PARCELADOS ---
-        if (isInstallment && monthDiff > 0 && lead.commissionInstallmentDate) {
-            const activationDate = new Date(lead.commissionInstallmentDate);
-            const activationDay = activationDate.getDate();
-            
-            // Se estamos olhando o mês atual do calendário, só mostra se o dia de hoje já for o dia da ativação
-            const currentYear = today.getFullYear();
-            const currentMonth = today.getMonth() + 1;
-            if (fYear === currentYear && fMonth === currentMonth) {
-                if (today.getDate() < activationDay) return;
-            }
-        }
-
-        // Puxa o Premio Liquido Novo conforme solicitado
         const currentPremium = lead.dealInfo.newNetPremium || lead.dealInfo.netPremium || 0;
 
-        // Regra 1: No mês da Vigência (Month 0) - Mostra tudo
         if (monthDiff === 0) {
             const { finalValue, pendingValue, basePortion, bonusPortion } = calculateCommissionRules(
                 currentPremium, lead.dealInfo.commission, lead.dealInfo.paymentMethod, lead.dealInfo.installments,
-                lead.commissionPaid, lead.cartaoPortoNovo, lead.commissionInstallmentPlan ? lead.commissionCustomInstallments : undefined,
-                lead.commissionCP, true
+                lead.commissionPaid, lead.cartaoPortoNovo, undefined, lead.commissionCP, true
             );
             result.push({
                 ...lead,
@@ -772,15 +778,18 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
                 basePortion,
                 bonusPortion,
                 pendingValue: pendingValue,
-                installmentText: isInstallment ? `1/${installmentsCount}` : null,
-                monthDiff: monthDiff
+                installmentText: null,
+                monthDiff: monthDiff,
+                isPaidCurrent: !!lead.commissionPaid
             });
         }
-        // Regra 2: Meses Futuros (Month > 0)
         else {
-            // CASO ESPECIAL: Comissão Base Paga mas CP pendente -> Mostra só CP (51.00)
+            // Mês futuro relativo ao início
+            // Se já está totalmente pago (e CP pago se houver), não mostra (já saiu da pendência).
+            if (lead.commissionPaid && (!hasCP || isCPPaid)) return;
+
             if (lead.commissionPaid && hasCP && !isCPPaid) {
-                 const bonusValue = (51 / installmentsCount);
+                 const bonusValue = 51; // Bônus CP residual
                  result.push({
                     ...lead,
                     displayType: 'CP_ONLY',
@@ -788,14 +797,12 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
                     basePortion: 0,
                     bonusPortion: bonusValue,
                     pendingValue: bonusValue,
-                    installmentText: isInstallment ? `${monthDiff + 1}/${installmentsCount}` : null,
-                    monthDiff: monthDiff
+                    installmentText: null,
+                    monthDiff: monthDiff,
+                    isPaidCurrent: false
                  });
-                 return;
-            }
-
-            // Caso A: Sem nenhum status (Pendente Total)
-            if (!isInstallment) {
+            } else if (!lead.commissionPaid) {
+                 // É uma pendência de meses anteriores (Overdue)
                  const { finalValue, pendingValue, basePortion, bonusPortion } = calculateCommissionRules(
                     currentPremium, lead.dealInfo.commission, lead.dealInfo.paymentMethod, lead.dealInfo.installments,
                     false, lead.cartaoPortoNovo, undefined, lead.commissionCP, false
@@ -808,40 +815,8 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
                     bonusPortion,
                     pendingValue: pendingValue,
                     installmentText: null,
-                    monthDiff: monthDiff
-                 });
-            } 
-            // Caso B: Parcelado (Mostra progresso e botão PG Parcela)
-            else if (isInstallment && monthDiff < installmentsCount) {
-                const { finalValue, pendingValue, basePortion, bonusPortion } = calculateCommissionRules(
-                    currentPremium, lead.dealInfo.commission, lead.dealInfo.paymentMethod, lead.dealInfo.installments,
-                    false, lead.cartaoPortoNovo, installmentsCount, lead.commissionCP, false
-                );
-                // No Parcelado, conforme regra, somamos apenas a parcela como pendente
-                result.push({
-                    ...lead,
-                    displayType: 'INSTALLMENT',
-                    commissionValue: finalValue,
-                    basePortion,
-                    bonusPortion,
-                    pendingValue: pendingValue,
-                    installmentText: `${monthDiff + 1}/${installmentsCount}`,
-                    monthDiff: monthDiff
-                });
-            }
-            
-            // Caso C: Bônus CP avulso (Aparece se CP não foi acionado, e se o lead não estiver já aparecendo como PENDING_PAST ou INSTALLMENT)
-            if (hasCP && !isCPPaid && isInstallment && monthDiff >= installmentsCount) {
-                 const bonusPortion = (51 / installmentsCount);
-                 result.push({
-                    ...lead,
-                    displayType: 'CP_ONLY',
-                    commissionValue: bonusPortion,
-                    basePortion: 0,
-                    bonusPortion: bonusPortion,
-                    pendingValue: bonusPortion,
-                    installmentText: null,
-                    monthDiff: monthDiff
+                    monthDiff: monthDiff,
+                    isPaidCurrent: false
                  });
             }
         }
@@ -850,9 +825,8 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
     return result.sort((a, b) => a.name.localeCompare(b.name));
   }, [leads, renewed, renewals, searchTermPaid, filterDatePaid]);
 
-  // Cálculo do total pendente seguindo rigorosamente o filtro de data da aba de Seguros Pagos
   const totalPendingPaid = useMemo(() => {
-    return paidItems.reduce((acc, item) => acc + (item.pendingValue || 0), 0);
+    return paidItems.reduce((acc, item) => acc + (item.isPaidCurrent ? 0 : (item.pendingValue || 0)), 0);
   }, [paidItems]);
 
   return (
@@ -952,7 +926,6 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
                              </div>
                         </div>
                     </div>
-
                     <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-col">
                         <div className="p-4 bg-emerald-50 border-b border-emerald-100 flex justify-between items-center">
                             <h4 className="font-bold text-emerald-900 flex items-center gap-2">
@@ -1016,11 +989,12 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
                                         <th className="px-4 py-3 text-[10px] font-bold text-blue-700 uppercase border-b text-center">% Com..</th>
                                         <th className="px-4 py-3 text-[10px] font-bold text-blue-700 uppercase border-b">Comissão Liq.</th>
                                         <th className="px-4 py-3 text-[10px] font-bold text-blue-700 uppercase border-b text-center">Ações</th>
+                                        <th className="px-4 py-3 text-[10px] font-bold text-blue-700 uppercase border-b text-center">Data de Pagamento</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100">
                                     {paidItems.map((item, idx) => (
-                                        <tr key={item.id + item.displayType + idx} className="hover:bg-gray-50 transition-colors">
+                                        <tr key={item.id + (item.displayType || 'REG') + idx} className="hover:bg-gray-50 transition-colors">
                                             <td className="px-4 py-3 text-xs font-bold text-gray-600 whitespace-nowrap">{formatDisplayDate(item.dealInfo?.startDate)}</td>
                                             <td className="px-4 py-3 text-xs font-bold text-gray-900">{item.name}</td>
                                             <td className="px-4 py-3 text-xs text-gray-700">{item.dealInfo?.insurer}</td>
@@ -1038,20 +1012,23 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
                                             </td>
                                             <td className="px-4 py-3">
                                                 <div className="flex items-center justify-center gap-2">
-                                                    {(item.displayType === 'REGULAR' || item.displayType === 'PENDING_PAST' || item.displayType === 'INSTALLMENT') && (
+                                                    {(item.displayType === 'REGULAR' || item.displayType === 'INSTALLMENT' || item.displayType === 'PENDING_PAST') && (
                                                         <>
                                                             {item.displayType === 'INSTALLMENT' ? (
                                                                 <div className="flex items-center gap-1">
-                                                                    <span className="text-[10px] font-extrabold text-indigo-700 bg-indigo-50 px-2 py-1 rounded border border-indigo-100 mr-1">
-                                                                        {item.installmentText}
-                                                                    </span>
-                                                                    <button onClick={() => toggleCheck(item, 'payInstallment')} className="flex items-center gap-1 px-2 py-1 rounded border text-[10px] font-bold transition-all bg-indigo-600 text-white border-indigo-700 hover:bg-indigo-700 shadow-sm">
-                                                                        <CheckCircle className="w-3 h-3" /> Pagar {item.installmentText}?
-                                                                    </button>
+                                                                    {item.isPaidCurrent ? (
+                                                                        <span className="flex items-center gap-1 px-2 py-1 rounded border text-[10px] font-bold transition-all bg-green-600 text-white border-green-700 shadow-sm whitespace-nowrap">
+                                                                            {item.installmentText} Paga <Check className="w-3 h-3" />
+                                                                        </span>
+                                                                    ) : (
+                                                                        <button onClick={() => toggleCheck(item, 'payInstallment')} className="flex items-center gap-1 px-2 py-1 rounded border text-[10px] font-bold transition-all bg-indigo-600 text-white border-indigo-700 hover:bg-indigo-700 shadow-sm whitespace-nowrap">
+                                                                            <CheckCircle className="w-3 h-3" /> Pagar {item.installmentText}?
+                                                                        </button>
+                                                                    )}
                                                                 </div>
                                                             ) : (
-                                                                <button onClick={() => toggleCheck(item, 'commissionPaid')} className={`flex items-center gap-1 px-2 py-1 rounded border text-[10px] font-bold transition-all ${item.commissionPaid ? 'bg-green-600 text-white border-green-700' : 'bg-gray-100 text-gray-400 border-gray-200 hover:border-green-500 hover:text-green-600'}`}>
-                                                                        <CheckCircle className="w-3 h-3" /> PAGA
+                                                                <button onClick={() => toggleCheck(item, 'commissionPaid')} className={`flex items-center gap-1 px-2 py-1 rounded border text-[10px] font-bold transition-all ${item.isPaidCurrent ? 'bg-green-600 text-white border-green-700' : 'bg-gray-100 text-gray-400 border-gray-200 hover:border-green-500 hover:text-green-600'}`}>
+                                                                        {item.isPaidCurrent ? <><Check className="w-3 h-3" /> PAGA</> : <><CheckCircle className="w-3 h-3" /> PAGA</>}
                                                                 </button>
                                                             )}
                                                         </>
@@ -1063,7 +1040,7 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
                                                         </button>
                                                     )}
 
-                                                    {(item.displayType === 'REGULAR' || item.displayType === 'PENDING_PAST' || item.displayType === 'CP_ONLY' || item.displayType === 'INSTALLMENT') && item.cartaoPortoNovo && (
+                                                    {(item.displayType === 'REGULAR' || item.displayType === 'CP_ONLY' || item.displayType === 'INSTALLMENT' || item.displayType === 'PENDING_PAST') && item.cartaoPortoNovo && (
                                                         <button onClick={() => toggleCheck(item, 'commissionCP')} className={`flex items-center gap-1 px-2 py-1 rounded border text-[10px] font-bold transition-all ${item.commissionCP ? 'bg-blue-600 text-white border-blue-700' : 'bg-gray-100 text-gray-400 border-gray-200 hover:border-blue-500 hover:text-blue-600'}`}>
                                                                 <DollarSign className="w-3 h-3" /> CP
                                                         </button>
@@ -1074,10 +1051,13 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
                                                     </button>
                                                 </div>
                                             </td>
+                                            <td className="px-4 py-3 text-xs text-center font-bold text-gray-600 whitespace-nowrap">
+                                                {item.isPaidCurrent ? formatDisplayDate(item.commissionPaidDate) : '-'}
+                                            </td>
                                         </tr>
                                     ))}
                                     {paidItems.length === 0 && (
-                                        <tr><td colSpan={7} className="px-4 py-12 text-center text-gray-400 text-sm italic">Nenhum registro pendente para este período.</td></tr>
+                                        <tr><td colSpan={8} className="px-4 py-12 text-center text-gray-400 text-sm italic">Nenhum registro pendente para este período.</td></tr>
                                     )}
                                 </tbody>
                             </table>
@@ -1107,7 +1087,7 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
                             onClick={() => handleConfirmPayInstallment(false)} 
                             className="w-full py-3 bg-indigo-600 text-white rounded hover:bg-indigo-700 font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2"
                         >
-                            <CheckCircle className="w-4 h-4" /> Confirmar {selectedLeadForPayInstallment.installmentText}
+                            <CheckCircle className="w-4 h-4" /> Confirmar Parcela {selectedLeadForPayInstallment.installmentText}
                         </button>
                         <button 
                             onClick={() => handleConfirmPayInstallment(true)} 
@@ -1258,7 +1238,7 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
                     </div>
                     <div className="p-6 space-y-4">
                         <p className="text-sm text-gray-600 font-medium">
-                            Selecione o consultor para gerar o PDF de produção do mês <b>${filterDate}</b>.
+                            Selecione o consultor para gerar o PDF de produção do mês <b>{filterDate}</b>.
                         </p>
                         <div>
                             <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Consultor Ativo</label>
