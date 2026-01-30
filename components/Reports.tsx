@@ -65,8 +65,12 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
       
       let installmentsCount = 1;
 
+      // Se estiver PAGO (não parcelado), forçamos 1 parcela para exibir o valor integral (A Vista)
+      if (isPaid && !customInstallments) {
+          installmentsCount = 1;
+      } 
       // Prioridade 1: Parcelamento Manual Escolhido pelo Usuário
-      if (customInstallments && customInstallments > 0) {
+      else if (customInstallments && customInstallments > 0) {
           installmentsCount = customInstallments;
       } 
       // Prioridade 2: Regras Automáticas
@@ -192,7 +196,9 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
                      commissionCPG: lead.commissionCPG,
                      commissionCPGType: lead.commissionCPGType,
                      commissionCPGInstallments: lead.commissionCPGInstallments,
-                     monthDiff: monthDiff
+                     monthDiff: monthDiff,
+                     commissionPaid: lead.commissionPaid,
+                     commissionInstallmentPlan: lead.commissionInstallmentPlan
                  });
             }
         }
@@ -497,10 +503,13 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
       if (field === 'commissionPaid') {
           if (update[field]) {
               update.commissionPaymentDate = now;
-              update.commissionPaidInstallments = lead.commissionCustomInstallments || 1;
+              // Ao pagar integral, remove o plano de parcelamento e reseta parcelas
+              update.commissionInstallmentPlan = false;
+              update.commissionCustomInstallments = 0;
+              update.commissionPaidInstallments = 0;
+              update.commissionPaymentDates = {};
           } else {
               update.commissionPaymentDate = null;
-              update.commissionPaidInstallments = 0;
           }
       } else if (field === 'commissionInstallmentPlan' && !update[field]) {
           update.commissionCustomInstallments = 0;
@@ -524,7 +533,10 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
       if (isAtVista) {
           update.commissionPaid = true;
           update.commissionPaymentDate = now;
+          update.commissionInstallmentPlan = false;
           update.commissionPaidInstallments = total;
+          update.commissionCustomInstallments = 0;
+          update.commissionPaymentDates = {};
       } else {
           update.commissionPaidInstallments = current;
           update.commissionPaymentDates = {
@@ -723,7 +735,18 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
         const isCPPaid = lead.commissionCP;
 
         if (monthDiff < 0) return;
-        if (monthDiff >= installmentsCount && (!hasCP || isCPPaid)) return;
+        
+        // NOVA LOGICA DE VISIBILIDADE PERSISTENTE:
+        // Leads sem status PAGA ou PARCELADO devem aparecer sempre para acompanhamento.
+        if (monthDiff > 0) {
+            if (isInstallment) {
+                // Se parcelado, some após o tempo total de parcelas (a menos que CP ainda esteja pendente)
+                if (monthDiff >= installmentsCount && (!hasCP || isCPPaid)) return;
+            } else {
+                // Se não for parcelado, só some se for marcado como PAGA (e CP, se houver, também estiver pago)
+                if (lead.commissionPaid && (!hasCP || isCPPaid)) return;
+            }
+        }
 
         const currentInstallment = monthDiff + 1;
         const isCurrentPaid = lead.commissionPaid || (isInstallment && !!lead.commissionPaymentDates?.[currentInstallment]);
@@ -1049,8 +1072,8 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
                                                         </>
                                                     )}
                                                     
-                                                    {(item.displayType === 'REGULAR' || item.displayType === 'PENDING_PAST') && (
-                                                        <button onClick={() => toggleCheck(item, 'commissionInstallmentPlan')} className={`flex items-center gap-1 px-2 py-1 rounded border text-[10px] font-bold transition-all ${item.commissionInstallmentPlan ? 'bg-indigo-600 text-white border-indigo-700' : 'bg-gray-100 text-gray-400 border-gray-200 hover:border-indigo-500 hover:text-indigo-1000'}`}>
+                                                    {(item.displayType === 'REGULAR' || item.displayType === 'PENDING_PAST') && !item.commissionPaid && (
+                                                        <button onClick={() => toggleCheck(item, 'commissionInstallmentPlan')} className={`flex items-center gap-1 px-2 py-1 rounded border text-[10px] font-bold transition-all ${item.commissionInstallmentPlan ? 'bg-indigo-600 text-white border-indigo-700' : 'bg-gray-100 text-gray-400 border-gray-200 hover:border-indigo-500 hover:text-indigo-600'}`}>
                                                                 <Calendar className="w-3 h-3" /> PARCELADO {item.commissionInstallmentPlan && item.commissionCustomInstallments ? `(${item.commissionCustomInstallments}x)` : ''}
                                                         </button>
                                                     )}
