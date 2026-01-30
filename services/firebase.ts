@@ -42,8 +42,7 @@ const parseCurrency = (val: any): number => {
     try {
         let cleanStr = val.toString();
         if (cleanStr.includes(',') || (cleanStr.includes('.') && cleanStr.split('.').length > 2)) {
-            cleanStr = cleanStr.replace(/[R$\s]/g, '').replace(/\./g, '');
-            cleanStr = cleanStr.replace(',', '.');
+            cleanStr = cleanStr.replace(/[R$\s]/g, '').replace(/\./g, '').replace(',', '.');
         } else {
             cleanStr = cleanStr.replace(/[^\d.]/g, '');
         }
@@ -113,8 +112,10 @@ export const mapDocumentToLead = (doc: any): Lead => {
         commissionCP: data.commissionCP || false,
         commissionInstallmentPlan: data.commissionInstallmentPlan || false,
         commissionCustomInstallments: data.commissionCustomInstallments || 0,
+        commissionInstallmentDate: data.commissionInstallmentDate || null,
         commissionPaidInstallments: data.commissionPaidInstallments || 0,
-        commissionPaidDate: data.commissionPaidDate || '',
+        commissionPaymentDate: data.commissionPaymentDate || null,
+        commissionPaymentDates: data.commissionPaymentDates || {},
         commissionCPG: data.commissionCPG || false,
         commissionCPGType: data.commissionCPGType,
         commissionCPGInstallments: data.commissionCPGInstallments,
@@ -194,8 +195,10 @@ const mapAppToDb = (collectionName: string, data: any) => {
         commissionCP: data.commissionCP || false,
         commissionInstallmentPlan: data.commissionInstallmentPlan || false,
         commissionCustomInstallments: data.commissionCustomInstallments || 0,
+        commissionInstallmentDate: data.commissionInstallmentDate || null,
         commissionPaidInstallments: data.commissionPaidInstallments || 0,
-        commissionPaidDate: data.commissionPaidDate || '',
+        commissionPaymentDate: data.commissionPaymentDate || null,
+        commissionPaymentDates: data.commissionPaymentDates || {},
         commissionCPG: data.commissionCPG || false,
         commissionCPGType: data.commissionCPGType || null,
         commissionCPGInstallments: data.commissionCPGInstallments || 0,
