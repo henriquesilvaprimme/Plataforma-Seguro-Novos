@@ -198,7 +198,8 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
                      commissionCPGInstallments: lead.commissionCPGInstallments,
                      monthDiff: monthDiff,
                      commissionPaid: lead.commissionPaid,
-                     commissionInstallmentPlan: lead.commissionInstallmentPlan
+                     commissionInstallmentPlan: lead.commissionInstallmentPlan,
+                     commissionCPDate: lead.commissionCPDate // Passa o campo para exibição
                  });
             }
         }
@@ -498,6 +499,16 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
           return;
       }
 
+      // Lógica específica para botão $CP: Grava data específica
+      if (field === 'commissionCP') {
+          const update = { 
+              commissionCP: !lead.commissionCP,
+              commissionCPDate: !lead.commissionCP ? now : null 
+          };
+          onUpdateLead({ ...lead, ...update });
+          return;
+      }
+
       const update: any = { [field]: !lead[field] };
       
       if (field === 'commissionPaid') {
@@ -736,7 +747,6 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
 
         if (monthDiff < 0) return;
         
-        // NOVA LOGICA DE VISIBILIDADE PERSISTENTE:
         // Leads sem status PAGA ou PARCELADO devem aparecer sempre para acompanhamento.
         if (monthDiff > 0) {
             if (isInstallment) {
@@ -1089,8 +1099,15 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
                                                     </button>
                                                 </div>
                                             </td>
-                                            <td className="px-4 py-3 text-xs font-bold text-gray-600 text-center">
-                                                {getPaymentDateDisplay()}
+                                            <td className="px-4 py-3 text-xs font-bold text-gray-600 text-center whitespace-nowrap">
+                                                <div className="flex items-center justify-center gap-2">
+                                                    <span>{getPaymentDateDisplay()}</span>
+                                                    {item.commissionCP && item.commissionCPDate && (
+                                                        <span className="inline-flex items-center gap-1 bg-blue-600 text-white text-[9px] px-1.5 py-0.5 rounded-md shadow-sm border border-blue-700" title={`Bônus CP pago em: ${formatDisplayDate(item.commissionCPDate)}`}>
+                                                            <DollarSign className="w-2.5 h-2.5" /> {formatDisplayDate(item.commissionCPDate)}
+                                                        </span>
+                                                    )}
+                                                </div>
                                             </td>
                                         </tr>
                                         );
