@@ -61,6 +61,7 @@ export interface Lead {
   // Controle Financeiro
   commissionPaid?: boolean;
   commissionCP?: boolean;
+  commissionCPDate?: string; // NOVO: Data específica do pagamento do bônus CP
   commissionInstallmentPlan?: boolean; // Novo: Define se segue a regra de parcelamento
   commissionCustomInstallments?: number; // Novo: Número de parcelas definido manualmente
   commissionInstallmentDate?: string; // NOVO: Data em que o parcelamento foi ativado
