@@ -28,6 +28,10 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
   const [cpgType, setCpgType] = useState<'A_VISTA' | 'PARCELADO'>('A_VISTA');
   const [cpgInstallments, setCpgInstallments] = useState(1);
 
+  // Estados para o Modal de Pagamento de Parcela (PG X/Y)
+  const [isPayInstallmentModalOpen, setIsPayInstallmentModalOpen] = useState(false);
+  const [selectedLeadForPayInstallment, setSelectedLeadForPayInstallment] = useState<any>(null);
+
   // Estados para o Modal de PDF
   const [isPDFModalOpen, setIsPDFModalOpen] = useState(false);
   const [selectedUserForPDF, setSelectedUserForPDF] = useState('');
@@ -474,7 +478,7 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
     URL.revokeObjectURL(url);
   };
 
-  const toggleCheck = (lead: Lead, field: keyof Lead) => {
+  const toggleCheck = (lead: any, field: string) => {
       if (!onUpdateLead) return;
       
       // Caso CPG
@@ -494,17 +498,52 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
           return;
       }
 
+      // NOVO: Abre o modal de pagamento de parcela se for a partir da 2a parcela
+      if (field === 'payInstallment') {
+          setSelectedLeadForPayInstallment(lead);
+          setIsPayInstallmentModalOpen(true);
+          return;
+      }
+
       const update: any = { [field]: !lead[field] };
       
       if (field === 'commissionPaid' && update[field]) {
           update.commissionInstallmentPlan = false;
           update.commissionCustomInstallments = 0;
+          update.commissionPaidInstallments = 0;
       } else if (field === 'commissionInstallmentPlan' && !update[field]) {
           update.commissionCustomInstallments = 0;
           update.commissionInstallmentDate = null;
+          update.commissionPaidInstallments = 0;
       }
 
       onUpdateLead({ ...lead, ...update });
+  };
+
+  const handleConfirmPayInstallment = (isAtVista: boolean) => {
+      if (!selectedLeadForPayInstallment || !onUpdateLead) return;
+
+      const total = selectedLeadForPayInstallment.commissionCustomInstallments || 1;
+      const current = (selectedLeadForPayInstallment.monthDiff || 0) + 1;
+      
+      const update: any = {};
+      
+      if (isAtVista) {
+          // À Vista: Quita tudo
+          update.commissionPaid = true;
+          update.commissionInstallmentPlan = false;
+          update.commissionPaidInstallments = total;
+      } else {
+          // Parcela individual: PG X/Y
+          update.commissionPaidInstallments = current;
+          if (current >= total) {
+              update.commissionPaid = true;
+          }
+      }
+
+      onUpdateLead({ ...selectedLeadForPayInstallment, ...update });
+      setIsPayInstallmentModalOpen(false);
+      setSelectedLeadForPayInstallment(null);
   };
 
   const handleConfirmManualInstallments = () => {
@@ -515,7 +554,8 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
           commissionInstallmentPlan: true,
           commissionPaid: false,
           commissionCustomInstallments: customInstallmentValue,
-          commissionInstallmentDate: new Date().toISOString() // GRAVA A DATA DE ATIVAÇÃO
+          commissionInstallmentDate: new Date().toISOString(), // GRAVA A DATA DE ATIVAÇÃO
+          commissionPaidInstallments: 0
       });
 
       setIsInstallmentModalOpen(false);
@@ -691,9 +731,16 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
         const installmentsCount = isInstallment ? (lead.commissionCustomInstallments || 1) : 1;
         const hasCP = lead.cartaoPortoNovo;
         const isCPPaid = lead.commissionCP;
+        const paidInstCount = lead.commissionPaidInstallments || 0;
 
         // Se monthDiff < 0, significa que o seguro ainda nem começou, não aparece em Seguros Pagos.
         if (monthDiff < 0) return;
+
+        // Se for marcado como integralmente PAGA E CP PAGA, não aparece mais
+        if (lead.commissionPaid && (!hasCP || isCPPaid)) return;
+
+        // TRAVA DE BAIXA INDIVIDUAL: Se esta parcela já foi marcada como paga, pula.
+        if (isInstallment && (monthDiff + 1) <= paidInstCount) return;
 
         // --- TRAVA DE DATA PARA PARCELADOS ---
         if (isInstallment && monthDiff > 0 && lead.commissionInstallmentDate) {
@@ -725,14 +772,12 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
                 basePortion,
                 bonusPortion,
                 pendingValue: pendingValue,
-                installmentText: isInstallment ? `1/${installmentsCount}` : null
+                installmentText: isInstallment ? `1/${installmentsCount}` : null,
+                monthDiff: monthDiff
             });
         }
         // Regra 2: Meses Futuros (Month > 0)
         else {
-            // Se marcado como integralmente PAGA E CP PAGA, não aparece mais
-            if (lead.commissionPaid && (!hasCP || isCPPaid)) return;
-
             // CASO ESPECIAL: Comissão Base Paga mas CP pendente -> Mostra só CP (51.00)
             if (lead.commissionPaid && hasCP && !isCPPaid) {
                  const bonusValue = (51 / installmentsCount);
@@ -743,7 +788,8 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
                     basePortion: 0,
                     bonusPortion: bonusValue,
                     pendingValue: bonusValue,
-                    installmentText: isInstallment ? `${monthDiff + 1}/${installmentsCount}` : null
+                    installmentText: isInstallment ? `${monthDiff + 1}/${installmentsCount}` : null,
+                    monthDiff: monthDiff
                  });
                  return;
             }
@@ -761,10 +807,11 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
                     basePortion,
                     bonusPortion,
                     pendingValue: pendingValue,
-                    installmentText: null
+                    installmentText: null,
+                    monthDiff: monthDiff
                  });
             } 
-            // Caso B: Parcelado (Mostra progresso e apenas botão Paga)
+            // Caso B: Parcelado (Mostra progresso e botão PG Parcela)
             else if (isInstallment && monthDiff < installmentsCount) {
                 const { finalValue, pendingValue, basePortion, bonusPortion } = calculateCommissionRules(
                     currentPremium, lead.dealInfo.commission, lead.dealInfo.paymentMethod, lead.dealInfo.installments,
@@ -778,7 +825,8 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
                     basePortion,
                     bonusPortion,
                     pendingValue: pendingValue,
-                    installmentText: `${monthDiff + 1}/${installmentsCount}`
+                    installmentText: `${monthDiff + 1}/${installmentsCount}`,
+                    monthDiff: monthDiff
                 });
             }
             
@@ -792,7 +840,8 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
                     basePortion: 0,
                     bonusPortion: bonusPortion,
                     pendingValue: bonusPortion,
-                    installmentText: null
+                    installmentText: null,
+                    monthDiff: monthDiff
                  });
             }
         }
@@ -991,14 +1040,20 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
                                                 <div className="flex items-center justify-center gap-2">
                                                     {(item.displayType === 'REGULAR' || item.displayType === 'PENDING_PAST' || item.displayType === 'INSTALLMENT') && (
                                                         <>
-                                                            {item.displayType === 'INSTALLMENT' && (
-                                                                <span className="text-[10px] font-extrabold text-indigo-700 bg-indigo-50 px-2 py-1 rounded border border-indigo-100">
-                                                                    {item.installmentText}
-                                                                </span>
+                                                            {item.displayType === 'INSTALLMENT' ? (
+                                                                <div className="flex items-center gap-1">
+                                                                    <span className="text-[10px] font-extrabold text-indigo-700 bg-indigo-50 px-2 py-1 rounded border border-indigo-100 mr-1">
+                                                                        {item.installmentText}
+                                                                    </span>
+                                                                    <button onClick={() => toggleCheck(item, 'payInstallment')} className="flex items-center gap-1 px-2 py-1 rounded border text-[10px] font-bold transition-all bg-indigo-600 text-white border-indigo-700 hover:bg-indigo-700 shadow-sm">
+                                                                        <CheckCircle className="w-3 h-3" /> Pagar {item.installmentText}?
+                                                                    </button>
+                                                                </div>
+                                                            ) : (
+                                                                <button onClick={() => toggleCheck(item, 'commissionPaid')} className={`flex items-center gap-1 px-2 py-1 rounded border text-[10px] font-bold transition-all ${item.commissionPaid ? 'bg-green-600 text-white border-green-700' : 'bg-gray-100 text-gray-400 border-gray-200 hover:border-green-500 hover:text-green-600'}`}>
+                                                                        <CheckCircle className="w-3 h-3" /> PAGA
+                                                                </button>
                                                             )}
-                                                            <button onClick={() => toggleCheck(item, 'commissionPaid')} className={`flex items-center gap-1 px-2 py-1 rounded border text-[10px] font-bold transition-all ${item.commissionPaid ? 'bg-green-600 text-white border-green-700' : 'bg-gray-100 text-gray-400 border-gray-200 hover:border-green-500 hover:text-green-600'}`}>
-                                                                    <CheckCircle className="w-3 h-3" /> PAGA
-                                                            </button>
                                                         </>
                                                     )}
                                                     
@@ -1031,6 +1086,45 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
                </div>
            )}
        </div>
+
+       {/* POP-UP PAGAMENTO DE PARCELA */}
+       {isPayInstallmentModalOpen && selectedLeadForPayInstallment && (
+           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fade-in">
+               <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden flex flex-col border border-gray-200">
+                    <div className="bg-indigo-600 px-6 py-4 flex justify-between items-center text-white">
+                        <h2 className="font-bold text-lg flex items-center gap-2">
+                            <CheckCircle className="w-5 h-5" /> Confirmar Pagamento
+                        </h2>
+                        <button onClick={() => setIsPayInstallmentModalOpen(false)} className="hover:text-gray-200 transition-colors">✕</button>
+                    </div>
+                    <div className="p-6 space-y-4">
+                        <p className="text-sm text-gray-600">
+                            Deseja confirmar o pagamento da parcela <b>{selectedLeadForPayInstallment.installmentText}</b> do cliente <b>{selectedLeadForPayInstallment.name}</b> ou quitar o seguro à vista?
+                        </p>
+                    </div>
+                    <div className="p-6 pt-0 flex flex-col gap-3">
+                        <button 
+                            onClick={() => handleConfirmPayInstallment(false)} 
+                            className="w-full py-3 bg-indigo-600 text-white rounded hover:bg-indigo-700 font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2"
+                        >
+                            <CheckCircle className="w-4 h-4" /> Confirmar {selectedLeadForPayInstallment.installmentText}
+                        </button>
+                        <button 
+                            onClick={() => handleConfirmPayInstallment(true)} 
+                            className="w-full py-3 bg-emerald-600 text-white rounded hover:bg-emerald-700 font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2"
+                        >
+                            <DollarSign className="w-4 h-4" /> Quitar À Vista (Total)
+                        </button>
+                        <button 
+                            onClick={() => setIsPayInstallmentModalOpen(false)} 
+                            className="w-full py-2 border border-gray-300 text-gray-600 rounded hover:bg-gray-50 font-bold text-sm transition-colors mt-2"
+                        >
+                            Cancelar
+                        </button>
+                    </div>
+               </div>
+           </div>
+       )}
 
        {/* POP-UP PARA ESCOLHER PARCELAMENTO DA COMISSÃO */}
        {isInstallmentModalOpen && selectedLeadForInstallments && (
