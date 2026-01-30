@@ -65,8 +65,11 @@ export interface Lead {
   commissionCustomInstallments?: number; // Novo: Número de parcelas definido manualmente
   commissionInstallmentDate?: string; // NOVO: Data em que o parcelamento foi ativado
   commissionPaidInstallments?: number; // NOVO: Quantidade de parcelas já pagas
-  commissionPaidDate?: string; // NOVO: Data em que a comissão/parcela foi marcada como paga
   
+  // Datas de Pagamento
+  commissionPaymentDate?: string; // Data do pagamento integral
+  commissionPaymentDates?: { [key: number]: string }; // Datas de cada parcela (1, 2, 3...)
+
   // Controle CPG (Comissão Paga ao Gerente/Consultor)
   commissionCPG?: boolean;
   commissionCPGType?: 'A_VISTA' | 'PARCELADO';
