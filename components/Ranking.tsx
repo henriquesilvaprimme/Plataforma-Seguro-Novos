@@ -22,8 +22,25 @@ interface UserMetrics {
 }
 
 export const Ranking: React.FC<RankingProps> = ({ leads, users }) => {
-  // Filtro de Data: Padrão Mês Atual
-  const [filterDate, setFilterDate] = useState(() => new Date().toISOString().slice(0, 7));
+  // Função auxiliar para obter YYYY-MM no fuso local
+  const getLocalMonth = () => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  };
+
+  // Função para extrair YYYY-MM de uma string de data respeitando o fuso local
+  const getMonthFromStr = (str?: string) => {
+    if (!str) return '';
+    // Se a string contém 'T', assumimos que é um ISO do Firebase (UTC). 
+    // O construtor Date() converterá para o horário local do navegador.
+    // Se não tiver 'T', adicionamos o sufixo de tempo para garantir interpretação local.
+    const d = new Date(str.includes('T') ? str : `${str}T00:00:00`);
+    if (isNaN(d.getTime())) return '';
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  };
+
+  // Filtro de Data: Padrão Mês Atual (Local)
+  const [filterDate, setFilterDate] = useState(getLocalMonth);
 
   // 1. Filtrar apenas vendas fechadas E que estejam dentro do mês selecionado
   const sales = leads.filter(l => {
@@ -35,7 +52,7 @@ export const Ranking: React.FC<RankingProps> = ({ leads, users }) => {
       const dateToCheck = l.dealInfo?.startDate || l.closedAt || '';
       if (!dateToCheck) return false;
       
-      return dateToCheck.startsWith(filterDate);
+      return getMonthFromStr(dateToCheck) === filterDate;
   });
 
   // 2. Mapear APENAS Usuários Ativos, que NÃO sejam Renovações e NÃO sejam Admin
@@ -211,7 +228,7 @@ export const Ranking: React.FC<RankingProps> = ({ leads, users }) => {
           })}
           
           {rankingList.length === 0 && (
-             <div className="py-12 text-center text-gray-400 bg-white rounded-xl border-2 border-dashed border-gray-200">
+             <div className="py-12 text-center text-gray-400 bg-white rounded-xl border-2 border-dashed border-gray-300">
                 <Trophy className="w-12 h-12 mx-auto mb-3 opacity-20" />
                 <p>Nenhuma venda registrada neste período.</p>
              </div>
