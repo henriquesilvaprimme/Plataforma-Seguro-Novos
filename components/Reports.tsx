@@ -13,8 +13,15 @@ type ReportTab = 'PRODUCTION' | 'PAID_INSURANCES';
 
 export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [], onUpdateLead }) => {
   const [activeTab, setActiveTab] = useState<ReportTab>('PRODUCTION');
-  const [filterDate, setFilterDate] = useState(() => new Date().toISOString().slice(0, 7));
-  const [filterDatePaid, setFilterDatePaid] = useState(() => new Date().toISOString().slice(0, 7));
+  
+  // Função auxiliar para obter YYYY-MM no fuso local
+  const getLocalMonth = () => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  };
+
+  const [filterDate, setFilterDate] = useState(getLocalMonth);
+  const [filterDatePaid, setFilterDatePaid] = useState(getLocalMonth);
   const [searchTermPaid, setSearchTermPaid] = useState('');
 
   // Estados para o Modal de Parcelamento Manual da Comissão
@@ -199,7 +206,7 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
                      monthDiff: monthDiff,
                      commissionPaid: lead.commissionPaid,
                      commissionInstallmentPlan: lead.commissionInstallmentPlan,
-                     commissionCPDate: lead.commissionCPDate // Passa o campo para exibição
+                     commissionCPDate: lead.commissionCPDate
                  });
             }
         }
@@ -499,7 +506,6 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
           return;
       }
 
-      // Lógica específica para botão $CP: Grava data específica
       if (field === 'commissionCP') {
           const update = { 
               commissionCP: !lead.commissionCP,
@@ -514,7 +520,6 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
       if (field === 'commissionPaid') {
           if (update[field]) {
               update.commissionPaymentDate = now;
-              // Ao pagar integral, remove o plano de parcelamento e reseta parcelas
               update.commissionInstallmentPlan = false;
               update.commissionCustomInstallments = 0;
               update.commissionPaidInstallments = 0;
@@ -747,13 +752,10 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
 
         if (monthDiff < 0) return;
         
-        // Leads sem status PAGA ou PARCELADO devem aparecer sempre para acompanhamento.
         if (monthDiff > 0) {
             if (isInstallment) {
-                // Se parcelado, some após o tempo total de parcelas (a menos que CP ainda esteja pendente)
                 if (monthDiff >= installmentsCount && (!hasCP || isCPPaid)) return;
             } else {
-                // Se não for parcelado, só some se for marcado como PAGA (e CP, se houver, também estiver pago)
                 if (lead.commissionPaid && (!hasCP || isCPPaid)) return;
             }
         }
@@ -1083,7 +1085,7 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
                                                     )}
                                                     
                                                     {(item.displayType === 'REGULAR' || item.displayType === 'PENDING_PAST') && !item.commissionPaid && (
-                                                        <button onClick={() => toggleCheck(item, 'commissionInstallmentPlan')} className={`flex items-center gap-1 px-2 py-1 rounded border text-[10px] font-bold transition-all ${item.commissionInstallmentPlan ? 'bg-indigo-600 text-white border-indigo-700' : 'bg-gray-100 text-gray-400 border-gray-200 hover:border-indigo-500 hover:text-indigo-600'}`}>
+                                                        <button onClick={() => toggleCheck(item, 'commissionInstallmentPlan')} className={`flex items-center gap-1 px-2 py-1 rounded border text-[10px] font-bold transition-all ${item.commissionInstallmentPlan ? 'bg-indigo-600 text-white border-indigo-700' : 'bg-gray-100 text-gray-400 border-gray-200 hover:border-indigo-500 hover:text-indigo-1000'}`}>
                                                                 <Calendar className="w-3 h-3" /> PARCELADO {item.commissionInstallmentPlan && item.commissionCustomInstallments ? `(${item.commissionCustomInstallments}x)` : ''}
                                                         </button>
                                                     )}
