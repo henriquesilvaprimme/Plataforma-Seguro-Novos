@@ -543,7 +543,7 @@ const LeadCard: React.FC<{ lead: Lead; users: User[]; onUpdate: (l: Lead) => voi
 
     {showDealModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fade-in">
-            <div className="bg-white rounded-lg shadow-xl w-full max-md overflow-hidden animate-fade-in">
+            <div className="bg-white rounded-lg shadow-xl w-full max-w-md overflow-hidden animate-fade-in">
                 <div className="bg-green-600 px-6 py-4 flex justify-between items-center">
                     <h2 className="text-white font-bold text-lg flex items-center gap-2">
                         <Shield className="w-5 h-5" />
