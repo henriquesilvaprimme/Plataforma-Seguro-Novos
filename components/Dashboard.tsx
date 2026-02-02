@@ -74,7 +74,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ newLeadsData, renewalLeads
   const dateFilter = (lead: Lead, isRenewalLogic: boolean) => {
       if (!filterDate) return true;
       if (!isRenewalLogic) {
-          return lead.createdAt && getMonthFromStr(lead.createdAt) === filterDate;
+          // Utiliza data de atribuição (Recebido em) como prioridade, conforme solicitado
+          const dateToCompare = lead.assignedAt || lead.createdAt;
+          return dateToCompare && getMonthFromStr(dateToCompare) === filterDate;
       } else {
           if (lead.status === LeadStatus.CLOSED) {
               return (lead.dealInfo?.startDate && getMonthFromStr(lead.dealInfo.startDate) === filterDate) || 
