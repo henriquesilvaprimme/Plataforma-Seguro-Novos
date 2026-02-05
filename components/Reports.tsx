@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Lead, LeadStatus } from '../types';
-import { FileBarChart2, DollarSign, Shield, Calendar, Search, CheckCircle, ChevronLeft, ChevronRight, Percent, Plus, Download, UserCheck, FileText } from './Icons';
+import { FileBarChart2, DollarSign, Shield, Calendar, Search, CheckCircle, ChevronLeft, ChevronRight, Percent, Plus, Download, UserCheck, FileText, Edit, Check } from './Icons';
 
 interface ReportsProps {
   leads: Lead[];
@@ -28,6 +28,7 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
   const [isInstallmentModalOpen, setIsInstallmentModalOpen] = useState(false);
   const [selectedLeadForInstallments, setSelectedLeadForInstallments] = useState<Lead | null>(null);
   const [customInstallmentValue, setCustomInstallmentValue] = useState(1);
+  const [firstInstallmentDate, setFirstInstallmentDate] = useState('');
 
   // Estados para o Modal CPG
   const [isCPGModalOpen, setIsCPGModalOpen] = useState(false);
@@ -42,6 +43,10 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
   // Estados para o Modal de PDF
   const [isPDFModalOpen, setIsPDFModalOpen] = useState(false);
   const [selectedUserForPDF, setSelectedUserForPDF] = useState('');
+
+  // Estado para edição manual de data de parcela anterior
+  const [editingPrevDateKey, setEditingPrevDateKey] = useState<string | null>(null);
+  const [tempPrevDate, setTempPrevDate] = useState('');
 
   const formatDisplayDate = (dateString?: string) => {
     if (!dateString) return '-';
@@ -151,6 +156,12 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
             
             const [startYear, startMonth] = normalizedStart.split('-').map(Number);
             const monthDiff = (filterYear - startYear) * 12 + (filterMonth - startMonth);
+            
+            // Lógica de Trava de Parcelas: Só avança se a anterior estiver paga
+            const paidCount = Object.keys(lead.commissionPaymentDates || {}).length;
+            const currentInstallment = Math.min(monthDiff + 1, paidCount + 1);
+            
+            // O filtro de produção deve ser baseado no mês cronológico (monthDiff === 0)
             const isFirstMonth = monthDiff === 0;
 
             const currentPremium = lead.dealInfo.newNetPremium || lead.dealInfo.netPremium || 0;
@@ -176,6 +187,7 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
                     isVisibleInMonth = (monthDiff >= 0 && monthDiff < cpgLimit);
                 }
             } else {
+                // Filtro retornado ao funcionamento original: baseado no calendário, não no pagamento
                 isVisibleInMonth = (monthDiff >= 0 && monthDiff < installmentsCount);
             }
 
@@ -193,7 +205,7 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
                      startDate: lead.dealInfo.startDate,
                      collaborator: lead.assignedTo || 'Não informado',
                      isFirstMonth,
-                     currentInstallment: monthDiff + 1,
+                     currentInstallment: currentInstallment,
                      totalInstallments: installmentsCount,
                      monthlyCommission: finalValue,
                      basePortion: basePortion,
@@ -206,7 +218,10 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
                      monthDiff: monthDiff,
                      commissionPaid: lead.commissionPaid,
                      commissionInstallmentPlan: lead.commissionInstallmentPlan,
-                     commissionCPDate: lead.commissionCPDate
+                     commissionCPDate: lead.commissionCPDate,
+                     commissionPaymentDates: lead.commissionPaymentDates,
+                     commissionInstallmentDate: lead.commissionInstallmentDate,
+                     commissionCustomInstallments: lead.commissionCustomInstallments
                  });
             }
         }
@@ -496,6 +511,7 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
       if (field === 'commissionInstallmentPlan' && !lead.commissionInstallmentPlan) {
           setSelectedLeadForInstallments(lead);
           setCustomInstallmentValue(1);
+          setFirstInstallmentDate(new Date().toISOString().split('T')[0]);
           setIsInstallmentModalOpen(true);
           return;
       }
@@ -541,7 +557,7 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
       if (!selectedLeadForPayInstallment || !onUpdateLead) return;
 
       const total = selectedLeadForPayInstallment.commissionCustomInstallments || 1;
-      const current = (selectedLeadForPayInstallment.monthDiff || 0) + 1;
+      const current = selectedLeadForPayInstallment.currentInstallment || 1;
       const now = new Date().toISOString();
       
       const update: any = {};
@@ -573,20 +589,21 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
   const handleConfirmManualInstallments = () => {
       if (!selectedLeadForInstallments || !onUpdateLead) return;
 
-      const now = new Date().toISOString();
+      const dateToUse = firstInstallmentDate ? `${firstInstallmentDate}T12:00:00Z` : new Date().toISOString();
 
       onUpdateLead({
           ...selectedLeadForInstallments,
           commissionInstallmentPlan: true,
           commissionPaid: false,
           commissionCustomInstallments: customInstallmentValue,
-          commissionInstallmentDate: now,
+          commissionInstallmentDate: dateToUse,
           commissionPaidInstallments: 0,
-          commissionPaymentDates: { 1: now }
+          commissionPaymentDates: { 1: dateToUse }
       });
 
       setIsInstallmentModalOpen(false);
       setSelectedLeadForInstallments(null);
+      setFirstInstallmentDate('');
   };
 
   const handleConfirmCPG = () => {
@@ -601,6 +618,32 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
 
       setIsCPGModalOpen(false);
       setSelectedLeadForCPG(null);
+  };
+
+  const handleUpdatePrevDate = (item: any, instIndex: number) => {
+      if (!onUpdateLead || !tempPrevDate) return;
+
+      // Localizamos o lead original na lista total de leads injetada via props para garantir integridade
+      const allPossibleLeads = [...leads, ...renewed, ...renewals];
+      const targetLead = allPossibleLeads.find(l => l.id === item.id);
+      
+      if (!targetLead) return;
+
+      const updatedDates = { ...(targetLead.commissionPaymentDates || {}) };
+      updatedDates[instIndex] = tempPrevDate;
+
+      const update: any = { 
+          commissionPaymentDates: updatedDates 
+      };
+
+      // Se for a primeira parcela sendo editada, opcionalmente atualizamos a data base
+      if (instIndex === 1) {
+          update.commissionInstallmentDate = tempPrevDate;
+      }
+
+      onUpdateLead({ ...targetLead, ...update });
+      setEditingPrevDateKey(null);
+      setTempPrevDate('');
   };
 
   const handleDownloadPDF = () => {
@@ -752,20 +795,23 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
 
         if (monthDiff < 0) return;
         
+        // Lógica de Trava: A parcela exibida não pode ser maior que a cronológica, 
+        // mas é limitada pelo que foi pago anteriormente.
+        const paidCount = Object.keys(lead.commissionPaymentDates || {}).length;
+        const currentInstallment = Math.min(monthDiff + 1, paidCount + 1);
+
         if (monthDiff > 0) {
             if (isInstallment) {
-                if (monthDiff >= installmentsCount && (!hasCP || isCPPaid)) return;
+                if (currentInstallment > installmentsCount && (!hasCP || isCPPaid)) return;
             } else {
                 if (lead.commissionPaid && (!hasCP || isCPPaid)) return;
             }
         }
 
-        const currentInstallment = monthDiff + 1;
         const isCurrentPaid = lead.commissionPaid || (isInstallment && !!lead.commissionPaymentDates?.[currentInstallment]);
-
         const currentPremium = lead.dealInfo.newNetPremium || lead.dealInfo.netPremium || 0;
 
-        if (monthDiff === 0) {
+        if (currentInstallment === 1) {
             const { finalValue, pendingValue, basePortion, bonusPortion } = calculateCommissionRules(
                 currentPremium, lead.dealInfo.commission, lead.dealInfo.paymentMethod, lead.dealInfo.installments,
                 isCurrentPaid, lead.cartaoPortoNovo, lead.commissionInstallmentPlan ? lead.commissionCustomInstallments : undefined,
@@ -779,8 +825,12 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
                 bonusPortion,
                 pendingValue: pendingValue,
                 installmentText: isInstallment ? `1/${installmentsCount}` : null,
+                currentInstallment: 1,
                 monthDiff: monthDiff,
-                isCurrentPaid
+                isCurrentPaid,
+                commissionPaymentDates: lead.commissionPaymentDates,
+                commissionInstallmentDate: lead.commissionInstallmentDate,
+                commissionCustomInstallments: lead.commissionCustomInstallments
             });
         }
         else {
@@ -793,9 +843,13 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
                     basePortion: 0,
                     bonusPortion: bonusValue,
                     pendingValue: bonusValue,
-                    installmentText: isInstallment ? `${monthDiff + 1}/${installmentsCount}` : null,
+                    installmentText: isInstallment ? `${currentInstallment}/${installmentsCount}` : null,
+                    currentInstallment: currentInstallment,
                     monthDiff: monthDiff,
-                    isCurrentPaid
+                    isCurrentPaid,
+                    commissionPaymentDates: lead.commissionPaymentDates,
+                    commissionInstallmentDate: lead.commissionInstallmentDate,
+                    commissionCustomInstallments: lead.commissionCustomInstallments
                  });
                  return;
             }
@@ -813,11 +867,15 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
                     bonusPortion,
                     pendingValue: pendingValue,
                     installmentText: null,
+                    currentInstallment: currentInstallment,
                     monthDiff: monthDiff,
-                    isCurrentPaid
+                    isCurrentPaid,
+                    commissionPaymentDates: lead.commissionPaymentDates,
+                    commissionInstallmentDate: lead.commissionInstallmentDate,
+                    commissionCustomInstallments: lead.commissionCustomInstallments
                  });
             } 
-            else if (isInstallment && monthDiff < installmentsCount) {
+            else if (isInstallment && currentInstallment <= installmentsCount) {
                 const { finalValue, pendingValue, basePortion, bonusPortion } = calculateCommissionRules(
                     currentPremium, lead.dealInfo.commission, lead.dealInfo.paymentMethod, lead.dealInfo.installments,
                     isCurrentPaid, lead.cartaoPortoNovo, installmentsCount, lead.commissionCP, false
@@ -829,13 +887,17 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
                     basePortion,
                     bonusPortion,
                     pendingValue: pendingValue,
-                    installmentText: `${monthDiff + 1}/${installmentsCount}`,
+                    installmentText: `${currentInstallment}/${installmentsCount}`,
+                    currentInstallment: currentInstallment,
                     monthDiff: monthDiff,
-                    isCurrentPaid
+                    isCurrentPaid,
+                    commissionPaymentDates: lead.commissionPaymentDates,
+                    commissionInstallmentDate: lead.commissionInstallmentDate,
+                    commissionCustomInstallments: lead.commissionCustomInstallments
                 });
             }
             
-            if (hasCP && !isCPPaid && isInstallment && monthDiff >= installmentsCount) {
+            if (hasCP && !isCPPaid && isInstallment && currentInstallment > installmentsCount) {
                  const bonusPortion = (51 / installmentsCount);
                  result.push({
                     ...lead,
@@ -845,8 +907,12 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
                     bonusPortion: bonusPortion,
                     pendingValue: bonusPortion,
                     installmentText: null,
+                    currentInstallment: currentInstallment,
                     monthDiff: monthDiff,
-                    isCurrentPaid
+                    isCurrentPaid,
+                    commissionPaymentDates: lead.commissionPaymentDates,
+                    commissionInstallmentDate: lead.commissionInstallmentDate,
+                    commissionCustomInstallments: lead.commissionCustomInstallments
                  });
             }
         }
@@ -1019,25 +1085,33 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
                                         <th className="px-4 py-3 text-[10px] font-bold text-blue-700 uppercase border-b">Prêmio Líquido</th>
                                         <th className="px-4 py-3 text-[10px] font-bold text-blue-700 uppercase border-b text-center">% Com..</th>
                                         <th className="px-4 py-3 text-[10px] font-bold text-blue-700 uppercase border-b">Comissão Liq.</th>
+                                        <th className="px-4 py-3 text-[10px] font-bold text-blue-700 uppercase border-b text-center">Parcela Anterior</th>
                                         <th className="px-4 py-3 text-[10px] font-bold text-blue-700 uppercase border-b text-center">Ações</th>
                                         <th className="px-4 py-3 text-[10px] font-bold text-blue-700 uppercase border-b text-center">Data de Pagamento</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100">
                                     {paidItems.map((item, idx) => {
+                                        const currentInstNum = item.currentInstallment || 1;
+                                        const prevInstNum = currentInstNum - 1;
+                                        const editingKey = `${item.id}-${prevInstNum}`;
+                                        const isEditingThis = editingPrevDateKey === editingKey;
+
                                         const getPaymentDateDisplay = () => {
                                             if (item.commissionPaid && !item.commissionInstallmentPlan) {
                                                 return formatDisplayDate(item.commissionPaymentDate);
                                             }
                                             if (item.commissionInstallmentPlan) {
                                                 const dates = item.commissionPaymentDates || {};
-                                                const currentInstallment = (item.monthDiff || 0) + 1;
-                                                if (currentInstallment === 1) {
-                                                    return formatDisplayDate(dates[1] || item.commissionInstallmentDate);
-                                                }
-                                                return formatDisplayDate(dates[currentInstallment]);
+                                                return formatDisplayDate(dates[currentInstNum]);
                                             }
                                             return '-';
+                                        };
+
+                                        const getPrevDateVal = () => {
+                                            if (!item.commissionInstallmentPlan || prevInstNum < 1) return null;
+                                            const dates = item.commissionPaymentDates || {};
+                                            return dates[prevInstNum] || (prevInstNum === 1 ? item.commissionInstallmentDate : null);
                                         };
 
                                         return (
@@ -1056,6 +1130,53 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
                                                 ) : (
                                                     formatMoney(item.commissionValue || 0)
                                                 )}
+                                            </td>
+                                            <td className="px-4 py-3 text-xs font-bold text-gray-600 text-center whitespace-nowrap min-w-[120px]">
+                                                {(() => {
+                                                    if (!item.commissionInstallmentPlan || prevInstNum < 1) return '-';
+                                                    
+                                                    const prevDate = getPrevDateVal();
+                                                    
+                                                    if (isEditingThis) {
+                                                        return (
+                                                            <div className="flex items-center gap-1">
+                                                                <input 
+                                                                    type="date" 
+                                                                    className="border border-indigo-300 rounded px-1 py-0.5 text-[10px] outline-none"
+                                                                    value={tempPrevDate}
+                                                                    onChange={(e) => setTempPrevDate(e.target.value)}
+                                                                />
+                                                                <button 
+                                                                    onClick={() => handleUpdatePrevDate(item, prevInstNum)}
+                                                                    className="p-1 bg-green-100 text-green-600 rounded hover:bg-green-200"
+                                                                >
+                                                                    <Check className="w-3 h-3" />
+                                                                </button>
+                                                            </div>
+                                                        );
+                                                    }
+
+                                                    return (
+                                                        <div className="flex items-center justify-center gap-2 group">
+                                                            <span>{prevDate ? formatDisplayDate(prevDate) : 'Pendente'}</span>
+                                                            <button 
+                                                                onClick={() => {
+                                                                    setEditingPrevDateKey(editingKey);
+                                                                    // Tenta formatar a data existente para o input date (YYYY-MM-DD)
+                                                                    let dateVal = '';
+                                                                    if (prevDate) {
+                                                                        if (prevDate.includes('T')) dateVal = prevDate.split('T')[0];
+                                                                        else if (prevDate.includes('-')) dateVal = prevDate;
+                                                                    }
+                                                                    setTempPrevDate(dateVal);
+                                                                }}
+                                                                className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-indigo-600 transition-all"
+                                                            >
+                                                                <Edit className="w-3 h-3" />
+                                                            </button>
+                                                        </div>
+                                                    );
+                                                })()}
                                             </td>
                                             <td className="px-4 py-3">
                                                 <div className="flex items-center justify-center gap-2">
@@ -1115,7 +1236,7 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
                                         );
                                     })}
                                     {paidItems.length === 0 && (
-                                        <tr><td colSpan={8} className="px-4 py-12 text-center text-gray-400 text-sm italic">Nenhum registro pendente para este período.</td></tr>
+                                        <tr><td colSpan={9} className="px-4 py-12 text-center text-gray-400 text-sm italic">Nenhum registro pendente para este período.</td></tr>
                                     )}
                                 </tbody>
                             </table>
@@ -1167,12 +1288,12 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
        {/* POP-UP PARA ESCOLHER PARCELAMENTO DA COMISSÃO */}
        {isInstallmentModalOpen && selectedLeadForInstallments && (
            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fade-in">
-               <div className="bg-white rounded-xl shadow-2xl w-full max-sm overflow-hidden flex flex-col border border-gray-200">
+               <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden flex flex-col border border-gray-200">
                     <div className="bg-indigo-600 px-6 py-4 flex justify-between items-center text-white">
                         <h2 className="font-bold text-lg flex items-center gap-2">
                             <Calendar className="w-5 h-5" /> Parcelar Comissão
                         </h2>
-                        <button onClick={() => setIsInstallmentModalOpen(false)} className="hover:text-gray-200 transition-colors">✕</button>
+                        <button onClick={() => { setIsInstallmentModalOpen(false); setFirstInstallmentDate(''); }} className="hover:text-gray-200 transition-colors">✕</button>
                     </div>
                     <div className="p-6 space-y-4">
                         <p className="text-sm text-gray-600">
@@ -1190,6 +1311,15 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
                                 ))}
                             </select>
                         </div>
+                        <div>
+                            <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Data de Pagamento da 1ª Parcela</label>
+                            <input 
+                                type="date"
+                                value={firstInstallmentDate}
+                                onChange={(e) => setFirstInstallmentDate(e.target.value)}
+                                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
+                            />
+                        </div>
                         <div className="bg-gray-50 p-3 rounded-lg border border-gray-100">
                             <p className="text-xs text-gray-500">
                                 A comissão total estimada será dividida por <b>{customInstallmentValue}</b> e distribuída nos próximos meses subsequentes ao início da vigência.
@@ -1198,7 +1328,7 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
                     </div>
                     <div className="p-6 pt-0 flex gap-3">
                         <button 
-                            onClick={() => setIsInstallmentModalOpen(false)} 
+                            onClick={() => { setIsInstallmentModalOpen(false); setFirstInstallmentDate(''); }} 
                             className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded hover:bg-gray-50 font-bold text-sm transition-colors"
                         >
                             Cancelar
@@ -1217,7 +1347,7 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
        {/* POP-UP CPG */}
        {isCPGModalOpen && selectedLeadForCPG && (
            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fade-in">
-               <div className="bg-white rounded-xl shadow-2xl w-full max-sm overflow-hidden flex flex-col border border-gray-200">
+               <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden flex flex-col border border-gray-200">
                     <div className="bg-purple-600 px-6 py-4 flex justify-between items-center text-white">
                         <h2 className="font-bold text-lg flex items-center gap-2">
                             <UserCheck className="w-5 h-5" /> Registrar CPG
@@ -1305,7 +1435,7 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
                                 onChange={(e) => setSelectedUserForPDF(e.target.value)}
                                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white cursor-pointer"
                             >
-                                <option value="">-- Selecione o Usuário --</option>
+                                <option value="">-- Selecione --</option>
                                 {collaborators.map(name => (
                                     <option key={name} value={name}>{name}</option>
                                 ))}
