@@ -162,7 +162,6 @@ const LeadCard: React.FC<{ lead: Lead; users: User[]; onUpdate: (l: Lead) => voi
       };
       onUpdate(updatedLead);
       
-      // Cria a cópia na coleção Renovações com o status específico "Renovação Primme"
       const renewalCopy: Lead = {
           ...updatedLead,
           id: `${lead.id}_renewal_copy_${Date.now()}`,
@@ -186,6 +185,16 @@ const LeadCard: React.FC<{ lead: Lead; users: User[]; onUpdate: (l: Lead) => voi
               ...lead,
               isDiscarded: true,
               notes: (lead.notes || '') + (isDuplicate ? "\n[SISTEMA] Lead excluído por duplicidade (Nome, Cidade e Telefone)." : "\n[SISTEMA] Lead descartado por duplicidade (Já Fechado).")
+          });
+      }
+  };
+
+  const handleKeepLead = () => {
+      if (confirm("Deseja manter este lead e ignorar o aviso de duplicidade?")) {
+          onUpdate({
+              ...lead,
+              isKeepConfirmed: true,
+              notes: (lead.notes || '') + "\n[SISTEMA] Lead mantido manualmente após aviso de duplicidade."
           });
       }
   };
@@ -346,13 +355,22 @@ const LeadCard: React.FC<{ lead: Lead; users: User[]; onUpdate: (l: Lead) => voi
                              )}
 
                              {(isAlreadyClosed || isDuplicate) && lead.status !== LeadStatus.LOST && (
-                                 <button 
-                                    onClick={handleDiscardDuplicate}
-                                    className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-[10px] font-bold transition-colors shadow-sm uppercase tracking-wide flex items-center gap-1 border border-red-700"
-                                 >
-                                     <XCircle className="w-3 h-3" />
-                                     {isDuplicate ? 'EXCLUIR LEAD' : 'DESCARTAR LEAD'}
-                                 </button>
+                                 <div className="flex gap-2">
+                                     <button 
+                                        onClick={handleKeepLead}
+                                        className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-[10px] font-bold transition-colors shadow-sm uppercase tracking-wide flex items-center gap-1 border border-blue-700"
+                                     >
+                                         <Check className="w-3 h-3" />
+                                         MANTER O LEAD
+                                     </button>
+                                     <button 
+                                        onClick={handleDiscardDuplicate}
+                                        className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-[10px] font-bold transition-colors shadow-sm uppercase tracking-wide flex items-center gap-1 border border-red-700"
+                                     >
+                                         <XCircle className="w-3 h-3" />
+                                         {isDuplicate ? 'EXCLUIR LEAD' : 'DESCARTAR LEAD'}
+                                     </button>
+                                 </div>
                              )}
                         </>
                     )}
@@ -686,16 +704,13 @@ export const LeadList: React.FC<LeadListProps> = ({ leads, users, onSelectLead, 
       name: '', vehicleModel: '', vehicleYear: '', city: '', phone: '', insuranceType: 'Novo', assignedTo: ''
   });
   
-  // State to control Schedule Alert Popup
   const [showScheduleAlert, setShowScheduleAlert] = useState(false);
   
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
   
-  // Ref para o container de rolagem
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
-  // Rola para o topo sempre que mudar a página
   useEffect(() => {
     if (scrollContainerRef.current) {
       scrollContainerRef.current.scrollTo(0, 0);
@@ -704,17 +719,13 @@ export const LeadList: React.FC<LeadListProps> = ({ leads, users, onSelectLead, 
 
   useEffect(() => { setCurrentPage(1); }, [searchTerm, filterStatus, filterDate]);
 
-  // Effect to check for today's schedules on load/update
   useEffect(() => {
     if (leads.length > 0) {
         const todayStr = new Date().toISOString().split('T')[0];
         const storageKey = `scheduleAlertDismissed_${currentUser?.id || 'guest'}`;
         const lastDismissed = localStorage.getItem(storageKey);
 
-        // Se já foi dispensado hoje, não faz nada
         if (lastDismissed === todayStr) return;
-
-        // Se o alerta já está visível, não precisa checar
         if (showScheduleAlert) return;
 
         const hasTodaySchedules = leads.some(l => {
@@ -728,11 +739,13 @@ export const LeadList: React.FC<LeadListProps> = ({ leads, users, onSelectLead, 
     }
   }, [leads, currentUser]);
 
-  // Lógica de Identificação de Duplicidade (Nome, Cidade, Telefone)
   const duplicateIds = useMemo(() => {
     const groups = new Map<string, Lead[]>();
     
     leads.forEach(l => {
+      // Ignora leads que já foram confirmados manualmente como "não duplicados"
+      if (l.isKeepConfirmed) return;
+
       const name = (l.name || '').toLowerCase().trim();
       const city = (l.city || '').toLowerCase().trim();
       const phone = (l.phone || '').replace(/\D/g, '');
@@ -747,7 +760,6 @@ export const LeadList: React.FC<LeadListProps> = ({ leads, users, onSelectLead, 
     const duplicates = new Set<string>();
     groups.forEach((groupLeads) => {
       if (groupLeads.length > 1) {
-          // Ordena: leads com atribuição primeiro, depois por data de criação (mais antigos primeiro)
           groupLeads.sort((a, b) => {
               const aAssigned = !!(a.assignedTo && a.assignedTo.trim() !== '');
               const bAssigned = !!(b.assignedTo && b.assignedTo.trim() !== '');
@@ -758,7 +770,6 @@ export const LeadList: React.FC<LeadListProps> = ({ leads, users, onSelectLead, 
               return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
           });
 
-          // O primeiro lead da lista ordenada é mantido como o "Original". Todos os outros são marcados como Duplicados.
           for (let i = 1; i < groupLeads.length; i++) {
               duplicates.add(groupLeads[i].id);
           }
@@ -773,7 +784,6 @@ export const LeadList: React.FC<LeadListProps> = ({ leads, users, onSelectLead, 
     const phone = lead.phone || '';
     const matchesSearch = name.toLowerCase().includes(term) || phone.includes(term); 
     
-    // Lógica atualizada para incluir filtro de 'Sem atribuição'
     const matchesStatus = filterStatus === 'all' 
       ? true 
       : filterStatus === 'unassigned'
@@ -787,19 +797,16 @@ export const LeadList: React.FC<LeadListProps> = ({ leads, users, onSelectLead, 
         } else { matchesDate = true; }
     }
 
-    // Filtro de Permissão: Se Admin vê tudo, caso contrário só vê os atribuídos a si mesmo
     const isAssignedToUser = !currentUser || currentUser.isAdmin || lead.assignedTo === currentUser.name;
 
     return matchesSearch && matchesStatus && matchesDate && isAssignedToUser;
   }).sort((a, b) => {
-    // NOVA LOGICA: Prioriza agendamentos de HOJE no topo da lista
     const aScheduledToday = a.status === LeadStatus.SCHEDULED && isToday(a.scheduledDate);
     const bScheduledToday = b.status === LeadStatus.SCHEDULED && isToday(b.scheduledDate);
 
     if (aScheduledToday && !bScheduledToday) return -1;
     if (!aScheduledToday && bScheduledToday) return 1;
 
-    // Se nenhum (ou ambos) for agendamento de hoje, segue a ordenação padrão original
     if (currentUser?.isAdmin) {
         const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
         const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
@@ -888,8 +895,9 @@ export const LeadList: React.FC<LeadListProps> = ({ leads, users, onSelectLead, 
       <div ref={scrollContainerRef} className="flex flex-col gap-4 pb-4 overflow-y-auto w-full px-1 flex-1">
         {paginatedLeads.map((lead) => {
             const normalizedPhone = (lead.phone || '').replace(/\D/g, '');
-            const isAlreadyClosed = lead.status !== LeadStatus.CLOSED && closedPhones.has(normalizedPhone);
-            const isDuplicate = duplicateIds.has(lead.id);
+            // Leads marcados como "Manter" não exibem mais os alertas de duplicidade
+            const isAlreadyClosed = lead.status !== LeadStatus.CLOSED && closedPhones.has(normalizedPhone) && !lead.isKeepConfirmed;
+            const isDuplicate = duplicateIds.has(lead.id) && !lead.isKeepConfirmed;
 
             return (
                 <LeadCard 
@@ -993,7 +1001,6 @@ export const LeadList: React.FC<LeadListProps> = ({ leads, users, onSelectLead, 
         </div>
       )}
 
-      {/* SCHEDULE ALERT MODAL */}
       {showScheduleAlert && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fade-in">
              <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-sm flex flex-col items-center text-center animate-bounce-in">
