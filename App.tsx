@@ -76,17 +76,20 @@ export default function App() {
     };
   }, []);
 
-  // Lógica para identificar telefones que já tiveram vendas fechadas
-  const closedPhones = useMemo(() => {
-    const allLeads = [...leadsCollectionRaw, ...renewalsCollectionRaw, ...renewedCollectionRaw];
-    const phones = new Set<string>();
-    allLeads.forEach(l => {
-      if (l.status === LeadStatus.CLOSED && l.phone) {
-        phones.add(l.phone.replace(/\D/g, ''));
+  // Lógica para identificar registros da aba Segurados (Nome, Telefone, Modelo e Ano iguais)
+  const insuredKeys = useMemo(() => {
+    const keys = new Set<string>();
+    renewalsCollectionRaw.forEach(l => {
+      const name = (l.name || '').toLowerCase().trim();
+      const phone = (l.phone || '').replace(/\D/g, '');
+      const model = (l.vehicleModel || '').toLowerCase().trim();
+      const year = (l.vehicleYear || '').toLowerCase().trim();
+      if (name && phone && model && year) {
+        keys.add(`${name}|${phone}|${model}|${year}`);
       }
     });
-    return phones;
-  }, [leadsCollectionRaw, renewalsCollectionRaw, renewedCollectionRaw]);
+    return keys;
+  }, [renewalsCollectionRaw]);
 
   // === HANDLERS ===
   const handleAddLead = (newLead: Lead) => {
@@ -357,7 +360,7 @@ export default function App() {
                                 onUpdateLead={handleUpdateLead}
                                 onAddLead={handleAddLead}
                                 currentUser={currentUser}
-                                closedPhones={closedPhones}
+                                insuredKeys={insuredKeys}
                             />
                         </div>
                     ) : <Navigate to="/dashboard" />
