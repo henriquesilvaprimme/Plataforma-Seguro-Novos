@@ -105,7 +105,23 @@ const LeadCard: React.FC<{ lead: Lead; users: User[]; onUpdate: (l: Lead) => voi
   useEffect(() => {
     setObservation(lead.notes || '');
     setScheduleDate(lead.scheduledDate || '');
-    if (!lead.assignedTo && !isAlreadyClosed && !isDuplicate) setIsEditingUser(true);
+    
+    // Quando o lead deixa de ser considerado duplicado (props mudam após o "Keep"), 
+    // reativamos os menus suspensos se o lead for Novo/Não atribuído
+    if (!isAlreadyClosed && !isDuplicate) {
+        if (lead.status === LeadStatus.NEW) {
+            setIsEditingStatus(true);
+            setSelectedStatus("");
+        }
+        if (!lead.assignedTo) {
+            setIsEditingUser(true);
+        }
+    } else {
+        // Se for duplicado, fechamos as edições automáticas
+        setIsEditingStatus(false);
+        setIsEditingUser(false);
+    }
+    
     setDealForm(prev => ({ ...prev, leadName: lead.name }));
   }, [lead, isAlreadyClosed, isDuplicate]);
 
@@ -184,7 +200,7 @@ const LeadCard: React.FC<{ lead: Lead; users: User[]; onUpdate: (l: Lead) => voi
           onUpdate({
               ...lead,
               isDiscarded: true,
-              notes: (lead.notes || '') + (isDuplicate ? "\n[SISTEMA] Lead excluído por duplicidade (Nome, Cidade e Telefone)." : "\n[SISTEMA] Lead descartado por duplicidade (Já Fechado).")
+              notes: (lead.notes || '') + (isDuplicate ? "\n[SISTEMA] Lead excluído por duplicidade (Nome, Telefone e Modelo)." : "\n[SISTEMA] Lead descartado por duplicidade (Já Fechado).")
           });
       }
   };
@@ -747,9 +763,9 @@ export const LeadList: React.FC<LeadListProps> = ({ leads, users, onSelectLead, 
       if (l.isKeepConfirmed) return;
 
       const name = (l.name || '').toLowerCase().trim();
-      const city = (l.city || '').toLowerCase().trim();
       const phone = (l.phone || '').replace(/\D/g, '');
-      const key = `${name}|${city}|${phone}`;
+      const model = (l.vehicleModel || '').toLowerCase().trim();
+      const key = `${name}|${phone}|${model}`;
       
       if (key.length > 5) {
           if (!groups.has(key)) groups.set(key, []);
