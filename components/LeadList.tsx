@@ -9,7 +9,7 @@ interface LeadListProps {
   onUpdateLead: (lead: Lead) => void;
   onAddLead: (lead: Lead) => void;
   currentUser: User | null;
-  closedPhones: Set<string>;
+  insuredKeys: Set<string>;
 }
 
 const INSURERS_LIST = [
@@ -711,7 +711,7 @@ const LeadCard: React.FC<{ lead: Lead; users: User[]; onUpdate: (l: Lead) => voi
   );
 };
 
-export const LeadList: React.FC<LeadListProps> = ({ leads, users, onSelectLead, onUpdateLead, onAddLead, currentUser, closedPhones }) => {
+export const LeadList: React.FC<LeadListProps> = ({ leads, users, onSelectLead, onUpdateLead, onAddLead, currentUser, insuredKeys }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [filterDate, setFilterDate] = useState<string>(''); 
@@ -911,8 +911,13 @@ export const LeadList: React.FC<LeadListProps> = ({ leads, users, onSelectLead, 
       <div ref={scrollContainerRef} className="flex flex-col gap-4 pb-4 overflow-y-auto w-full px-1 flex-1">
         {paginatedLeads.map((lead) => {
             const normalizedPhone = (lead.phone || '').replace(/\D/g, '');
-            // Leads marcados como "Manter" não exibem mais os alertas de duplicidade
-            const isAlreadyClosed = lead.status !== LeadStatus.CLOSED && closedPhones.has(normalizedPhone) && !lead.isKeepConfirmed;
+            const nameKey = (lead.name || '').toLowerCase().trim();
+            const modelKey = (lead.vehicleModel || '').toLowerCase().trim();
+            const yearKey = (lead.vehicleYear || '').toLowerCase().trim();
+            const currentRegistryKey = `${nameKey}|${normalizedPhone}|${modelKey}|${yearKey}`;
+
+            // Validação rigorosa: Nome, Telefone, Modelo e Ano/Modelo idênticos à aba Segurados
+            const isAlreadyClosed = lead.status !== LeadStatus.CLOSED && insuredKeys.has(currentRegistryKey) && !lead.isKeepConfirmed;
             const isDuplicate = duplicateIds.has(lead.id) && !lead.isKeepConfirmed;
 
             return (
