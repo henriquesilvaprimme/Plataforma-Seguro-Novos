@@ -87,8 +87,9 @@ export interface Lead {
   aiAnalysis?: string;
   aiActionPlan?: string[];
 
-  // Controle de Descarte
+  // Controle de Descarte e Duplicidade
   isDiscarded?: boolean;
+  isKeepConfirmed?: boolean;
 }
 
 export interface User {
