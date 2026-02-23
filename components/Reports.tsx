@@ -23,6 +23,7 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
   const [filterDate, setFilterDate] = useState(getLocalMonth);
   const [filterDatePaid, setFilterDatePaid] = useState(getLocalMonth);
   const [searchTermPaid, setSearchTermPaid] = useState('');
+  const [paymentFilterPaid, setPaymentFilterPaid] = useState<'TODOS' | 'PAGOS' | 'NAO_PAGOS'>('TODOS');
 
   // Estados para o Modal de Parcelamento Manual da Comissão
   const [isInstallmentModalOpen, setIsInstallmentModalOpen] = useState(false);
@@ -161,7 +162,7 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
             const paidCount = Object.keys(lead.commissionPaymentDates || {}).length;
             const currentInstallment = Math.min(monthDiff + 1, paidCount + 1);
             
-            // O filtro de produção deve ser baseado no mês cronológico (monthDiff === 0)
+            // O filtro de produção deve ser baseado no mês cronológico para evitar puxar vendas antigas
             const isFirstMonth = monthDiff === 0;
 
             const currentPremium = lead.dealInfo.newNetPremium || lead.dealInfo.netPremium || 0;
@@ -187,7 +188,7 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
                     isVisibleInMonth = (monthDiff >= 0 && monthDiff < cpgLimit);
                 }
             } else {
-                // Filtro retornado ao funcionamento original: baseado no calendário, não no pagamento
+                // Filtro restabelecido: baseado apenas no calendário cronológico
                 isVisibleInMonth = (monthDiff >= 0 && monthDiff < installmentsCount);
             }
 
@@ -597,7 +598,8 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
           commissionPaid: false,
           commissionCustomInstallments: customInstallmentValue,
           commissionInstallmentDate: dateToUse,
-          commissionPaidInstallments: 0,
+          // Agora marcamos a 1ª parcela como paga já na configuração inicial
+          commissionPaidInstallments: 1, 
           commissionPaymentDates: { 1: dateToUse }
       });
 
@@ -918,8 +920,16 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
         }
     });
 
-    return result.sort((a, b) => a.name.localeCompare(b.name));
-  }, [leads, renewed, renewals, searchTermPaid, filterDatePaid]);
+    const sorted = result.sort((a, b) => a.name.localeCompare(b.name));
+    
+    if (paymentFilterPaid === 'PAGOS') {
+        return sorted.filter(item => item.isCurrentPaid);
+    } else if (paymentFilterPaid === 'NAO_PAGOS') {
+        return sorted.filter(item => !item.isCurrentPaid);
+    }
+
+    return sorted;
+  }, [leads, renewed, renewals, searchTermPaid, filterDatePaid, paymentFilterPaid]);
 
   const totalPendingPaid = useMemo(() => {
     return paidItems.reduce((acc, item) => acc + (item.pendingValue || 0), 0);
@@ -1070,9 +1080,20 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
                                 <DollarSign className="w-5 h-5 text-blue-600" />
                                 <h3 className="font-bold text-gray-800">Pesquisar Seguros Pagos</h3>
                             </div>
-                            <div className="relative w-full md:w-80">
-                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
-                                <input type="text" placeholder="Nome ou Telefone..." value={searchTermPaid} onChange={(e) => setSearchTermPaid(e.target.value)} className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
+                            <div className="flex flex-col md:flex-row gap-2 w-full md:w-auto">
+                                <div className="relative w-full md:w-80">
+                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+                                    <input type="text" placeholder="Nome ou Telefone..." value={searchTermPaid} onChange={(e) => setSearchTermPaid(e.target.value)} className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
+                                </div>
+                                <select 
+                                    value={paymentFilterPaid} 
+                                    onChange={(e) => setPaymentFilterPaid(e.target.value as any)}
+                                    className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white font-medium text-gray-700 cursor-pointer"
+                                >
+                                    <option value="TODOS">Todos</option>
+                                    <option value="NAO_PAGOS">Não Pagos</option>
+                                    <option value="PAGOS">Pagos</option>
+                                </select>
                             </div>
                         </div>
                         <div className="overflow-x-auto">
@@ -1103,15 +1124,17 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
                                             }
                                             if (item.commissionInstallmentPlan) {
                                                 const dates = item.commissionPaymentDates || {};
+                                                // Mostra a data da parcela atual (inclusive se for a 1ª)
                                                 return formatDisplayDate(dates[currentInstNum]);
                                             }
                                             return '-';
                                         };
 
                                         const getPrevDateVal = () => {
+                                            // Somente exibe se tivermos uma parcela anterior paga (da 2ª em diante)
                                             if (!item.commissionInstallmentPlan || prevInstNum < 1) return null;
                                             const dates = item.commissionPaymentDates || {};
-                                            return dates[prevInstNum] || (prevInstNum === 1 ? item.commissionInstallmentDate : null);
+                                            return dates[prevInstNum];
                                         };
 
                                         return (
@@ -1133,9 +1156,8 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
                                             </td>
                                             <td className="px-4 py-3 text-xs font-bold text-gray-600 text-center whitespace-nowrap min-w-[120px]">
                                                 {(() => {
-                                                    if (!item.commissionInstallmentPlan || prevInstNum < 1) return '-';
-                                                    
                                                     const prevDate = getPrevDateVal();
+                                                    if (!item.commissionInstallmentPlan || prevInstNum < 1) return '-';
                                                     
                                                     if (isEditingThis) {
                                                         return (
@@ -1162,7 +1184,6 @@ export const Reports: React.FC<ReportsProps> = ({ leads, renewed, renewals = [],
                                                             <button 
                                                                 onClick={() => {
                                                                     setEditingPrevDateKey(editingKey);
-                                                                    // Tenta formatar a data existente para o input date (YYYY-MM-DD)
                                                                     let dateVal = '';
                                                                     if (prevDate) {
                                                                         if (prevDate.includes('T')) dateVal = prevDate.split('T')[0];
