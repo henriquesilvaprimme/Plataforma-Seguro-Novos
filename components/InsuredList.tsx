@@ -316,6 +316,8 @@ export const InsuredList: React.FC<InsuredListProps> = ({ leads, onUpdateLead })
   // 1. Usando todos os leads passados na prop (coleção renovacoes)
   const insuredLeads = leads; 
 
+  const activeCount = insuredLeads.filter(l => l.status !== LeadStatus.LOST).length;
+
   // 2. Filter by Search and Date
   const filtered = insuredLeads.filter(l => {
      const term = searchTerm.toLowerCase();
@@ -351,7 +353,12 @@ export const InsuredList: React.FC<InsuredListProps> = ({ leads, onUpdateLead })
                 <FileText className="w-6 h-6" />
              </div>
              <div>
-                <h2 className="text-xl font-bold text-gray-800">Segurados</h2>
+                <div className="flex items-center gap-2">
+                   <h2 className="text-xl font-bold text-gray-800">Segurados</h2>
+                   <span className="bg-blue-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm">
+                      {activeCount} Ativos
+                   </span>
+                </div>
                 <p className="text-xs text-gray-500">Gestão de Apólices e Endossos</p>
              </div>
           </div>
